@@ -176,6 +176,30 @@ export const RegistrarLocal = () => {
     return true;
   };
 
+  // Helper para mostrar el nombre legible de la zona
+  const getZoneLabel = (id) => {
+    if (!id) return "";
+
+    // Casos especiales conocidos del estadio
+    if (id === "oriente") return "ORIENTE";
+    if (id === "occidente") return "OCCIDENTE";
+    if (id === "norte") return "TRIBUNA NORTE";
+
+    // Zonas tipo zona_a_1 -> "ZONA A1"
+    if (id.startsWith("zona_")) {
+      const parts = id.split("_"); // ['zona','a','1']
+      if (parts.length >= 3) {
+        return `ZONA ${parts[1].toUpperCase()}${parts[2]}`;
+      }
+      if (parts.length === 2) {
+        return `ZONA ${parts[1].toUpperCase()}`;
+      }
+    }
+
+    // Fallback genérico: reemplazar guiones bajos y poner en mayúsculas
+    return id.replace(/_/g, " ").toUpperCase();
+  };
+
   // ====== onChange ESTADIO (soporta contrato viejo y nuevo) ======
   const handleStadiumChange = useCallback((arg1, arg2) => {
     if (Array.isArray(arg1) && arg2 && typeof arg2 === "object") {
@@ -466,10 +490,10 @@ export const RegistrarLocal = () => {
 
                     {selectedZoneId && (
                       <div className="space-y-3 rounded-lg border p-3 bg-zinc-900/30">
-                        <div className="text-sm font-mediumtext-zinc-200">
+                        <div className="text-sm font-medium text-zinc-200">
                           Zona seleccionada:{" "}
                           <span className="font-semibold">
-                            {selectedZoneId}
+                            {getZoneLabel(selectedZoneId)}
                           </span>
                         </div>
 
@@ -555,7 +579,7 @@ export const RegistrarLocal = () => {
                         <div className="text-sm font-medium text-zinc-200">
                           Zona seleccionada:{" "}
                           <span className="font-semibold">
-                            {selectedTheaterZoneId}
+                            {getZoneLabel(selectedTheaterZoneId)}
                           </span>
                         </div>
 
