@@ -9,6 +9,7 @@ import { ConfigProfile } from "./pages/usuarios/ConfigProfile";
 import { DeleteProfile } from "./pages/usuarios/DeleteProfile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
+import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           </Route>
           <Route path="/registrarProductor" element={<RegistrarProductor />} />
           <Route path="/registrarLocal" element={<RegistrarLocal />} />
+          <Route path="/registrarEvento" element={<RegistrarEvento />} />
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
         </Route>
       </Routes>

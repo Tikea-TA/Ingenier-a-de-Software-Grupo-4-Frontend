@@ -42,6 +42,66 @@ const mapTipoEspacioToBackend = (value) => {
   }
 };
 
+/** Convierte código de asiento tipo "A1" / "AA23" a coordenadas 0-based { fila, columna } */
+function seatCodeToCoord(code) {
+  if (typeof code !== "string") return null;
+  const match = code.trim().match(/^([A-Za-z]+)(\d+)$/);
+  if (!match) return null;
+  const letters = match[1].toUpperCase();
+  const numStr = match[2];
+
+  let n = 0;
+  for (let i = 0; i < letters.length; i++) {
+    const ch = letters.charCodeAt(i);
+    if (ch < 65 || ch > 90) return null;
+    n = n * 26 + (ch - 64); // A=1 ... Z=26
+  }
+  const fila = n - 1;
+  const columna = parseInt(numStr, 10) - 1;
+  if (Number.isNaN(fila) || Number.isNaN(columna) || fila < 0 || columna < 0) {
+    return null;
+  }
+  return { fila, columna };
+}
+
+/** Normaliza el array de asientos bloqueados a [{fila, columna}] */
+function normalizeBlockedSeats(blocked) {
+  if (!Array.isArray(blocked)) return [];
+  const out = [];
+  for (const b of blocked) {
+    if (typeof b === "string") {
+      const coord = seatCodeToCoord(b);
+      if (coord) out.push(coord);
+    } else if (Array.isArray(b) && b.length === 2) {
+      const [fila, columna] = b;
+      if (typeof fila === "number" && typeof columna === "number") {
+        out.push({ fila, columna });
+      }
+    } else if (b && typeof b === "object") {
+      if (typeof b.fila === "number" && typeof b.columna === "number") {
+        out.push({ fila: b.fila, columna: b.columna });
+      } else if (typeof b.row === "number" && typeof b.col === "number") {
+        out.push({ fila: b.row, columna: b.col });
+      }
+    }
+  }
+  return out;
+}
+
+/** Convierte un id técnico de zona en un nombre de zona legible */
+function prettifyZoneId(id) {
+  if (!id) return "";
+  if (id === "oriente") return "ORIENTE";
+  if (id === "occidente") return "OCCIDENTE";
+  if (id === "norte") return "TRIBUNA NORTE";
+  if (id === "escenario") return "ESCENARIO";
+  if (id.startsWith("zona_")) {
+    const rest = id.slice("zona_".length).toUpperCase();
+    return `ZONA ${rest}`;
+  }
+  return String(id).toUpperCase();
+}
+
 export const RegistrarLocal = () => {
   const navigate = useNavigate();
   const [errors, setErrors] = useState({});
@@ -131,8 +191,78 @@ export const RegistrarLocal = () => {
     }
 
     const tipoLocal = mapTipoEspacioToBackend(tipoEspacio);
-
     const idGestor = 18; // Gestor de eventos
+
+    // ===== Construir TRAMA de configuración de zonas & asientos =====
+    let configuracionLocal = null;
+
+    if (tipoEspacio === "estadio") {
+      const zonas = {};
+      Object.entries(zonesState || {}).forEach(([zoneId, estado]) => {
+        if (zoneId === "escenario") return;
+        const tieneDistribucion = !!zoneSeatDist[zoneId];
+        const seatMap = seatMapsByZone[zoneId];
+        zonas[zoneId] = {
+          idZona: zoneId,
+          nombreZona: prettifyZoneId(zoneId),
+          estado, // "available" | "selected" | "blocked"
+          habilitada: estado !== "blocked",
+          tieneDistribucionAsientos: tieneDistribucion,
+          mapaAsientos:
+            tieneDistribucion && seatMap
+              ? {
+                  filas: seatMap.rows,
+                  columnas: seatMap.cols,
+                  asientosBloqueados: normalizeBlockedSeats(seatMap.blocked),
+                }
+              : null,
+        };
+      });
+      configuracionLocal = {
+        tipoEspacio: "ESTADIO",
+        zonas,
+      };
+    } else if (tipoEspacio === "teatro") {
+      const zonas = {};
+      Object.entries(theaterZonesState || {}).forEach(([zoneId, estado]) => {
+        if (zoneId === "escenario") return;
+        const tieneDistribucion = !!theaterZoneSeatDist[zoneId];
+        const seatMap = theaterSeatMapsByZone[zoneId];
+        zonas[zoneId] = {
+          idZona: zoneId,
+          nombreZona: prettifyZoneId(zoneId),
+          estado,
+          habilitada: estado !== "blocked",
+          tieneDistribucionAsientos: tieneDistribucion,
+          mapaAsientos:
+            tieneDistribucion && seatMap
+              ? {
+                  filas: seatMap.rows,
+                  columnas: seatMap.cols,
+                  asientosBloqueados: normalizeBlockedSeats(seatMap.blocked),
+                }
+              : null,
+        };
+      });
+      configuracionLocal = {
+        tipoEspacio: "TEATRO",
+        zonas,
+      };
+    } else if (tipoEspacio === "auditorio") {
+      configuracionLocal = {
+        tipoEspacio: "AUDITORIO",
+        tieneDistribucionAsientos: escenarioHasSeatDist,
+        mapaAsientos: escenarioHasSeatDist
+          ? {
+              filas: escenarioSeatMap.rows,
+              columnas: escenarioSeatMap.cols,
+              asientosBloqueados: normalizeBlockedSeats(
+                escenarioSeatMap.blocked
+              ),
+            }
+          : null,
+      };
+    }
 
     const payload = {
       idGestor,
@@ -142,6 +272,8 @@ export const RegistrarLocal = () => {
       capacidadMaxima: Number(data.capacidad),
       estado: ESTADO_INICIAL_LOCAL,
       documentacionAdjunta: documentoBase64,
+      // Adjuntamos la trama de configuración al payload
+      configuracionLocal,
     };
 
     try {
@@ -174,30 +306,6 @@ export const RegistrarLocal = () => {
       return false;
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
     return true;
-  };
-
-  // Helper para mostrar el nombre legible de la zona
-  const getZoneLabel = (id) => {
-    if (!id) return "";
-
-    // Casos especiales conocidos del estadio
-    if (id === "oriente") return "ORIENTE";
-    if (id === "occidente") return "OCCIDENTE";
-    if (id === "norte") return "TRIBUNA NORTE";
-
-    // Zonas tipo zona_a_1 -> "ZONA A1"
-    if (id.startsWith("zona_")) {
-      const parts = id.split("_"); // ['zona','a','1']
-      if (parts.length >= 3) {
-        return `ZONA ${parts[1].toUpperCase()}${parts[2]}`;
-      }
-      if (parts.length === 2) {
-        return `ZONA ${parts[1].toUpperCase()}`;
-      }
-    }
-
-    // Fallback genérico: reemplazar guiones bajos y poner en mayúsculas
-    return id.replace(/_/g, " ").toUpperCase();
   };
 
   // ====== onChange ESTADIO (soporta contrato viejo y nuevo) ======
@@ -263,7 +371,9 @@ export const RegistrarLocal = () => {
       const en = arg1,
         map = arg2;
       setTheaterEnabledIds((prev) => (arrayEqual(prev, en) ? prev : en));
-      setTheaterZonesState((prev) => (shallowEqualObj(prev, map) ? prev : map));
+      setTheaterZonesState((prev) =>
+        shallowEqualObj(prev, map) ? prev : map
+      );
       setSelectedTheaterZoneId((prev) => prev);
       return;
     }
@@ -380,7 +490,9 @@ export const RegistrarLocal = () => {
                       Ingesa la dirección del local.
                     </Text>
                     {errors.direccion && (
-                      <p className="text-sm text-red-400">{errors.direccion}</p>
+                      <p className="text-sm text-red-400">
+                        {errors.direccion}
+                      </p>
                     )}
                   </div>
 
@@ -463,7 +575,9 @@ export const RegistrarLocal = () => {
                       de seguridad.
                     </Text>
                     {errors.capacidad && (
-                      <p className="text-sm text-red-400">{errors.capacidad}</p>
+                      <p className="text-sm text-red-400">
+                        {errors.capacidad}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -493,7 +607,7 @@ export const RegistrarLocal = () => {
                         <div className="text-sm font-medium text-zinc-200">
                           Zona seleccionada:{" "}
                           <span className="font-semibold">
-                            {getZoneLabel(selectedZoneId)}
+                            {prettifyZoneId(selectedZoneId)}
                           </span>
                         </div>
 
@@ -579,7 +693,7 @@ export const RegistrarLocal = () => {
                         <div className="text-sm font-medium text-zinc-200">
                           Zona seleccionada:{" "}
                           <span className="font-semibold">
-                            {getZoneLabel(selectedTheaterZoneId)}
+                            {prettifyZoneId(selectedTheaterZoneId)}
                           </span>
                         </div>
 
