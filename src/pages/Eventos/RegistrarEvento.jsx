@@ -1,4 +1,3 @@
-// RegistrarEvento.jsx
 import FilePicker from "../../components/FilePicker";
 import {
   Flex,
@@ -377,7 +376,7 @@ export const RegistrarEvento = () => {
                       <Select.Content
                         position="popper"
                         sideOffset={4}
-                        className="w-[var(--radix-select-trigger-width)]"
+                        className="w-(--radix-select-trigger-width)"
                       >
                         {ListaLocales.map((local) => (
                           <Select.Item
@@ -453,7 +452,7 @@ export const RegistrarEvento = () => {
                       <Select.Content
                         position="popper"
                         sideOffset={4}
-                        className="w-[var(--radix-select-trigger-width)]"
+                        className="w-(--radix-select-trigger-width)"
                       >
                         {TiposEvento.map((tipo) => (
                           <Select.Item
@@ -582,7 +581,7 @@ export const RegistrarEvento = () => {
                             <Select.Content
                               position="popper"
                               sideOffset={4}
-                              className="w-[var(--radix-select-trigger-width)]"
+                              className="w-(--radix-select-trigger-width)"
                             >
                               <Select.Item value="FIJO">
                                 Precio fijo (S/)
