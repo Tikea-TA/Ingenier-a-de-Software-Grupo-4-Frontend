@@ -5,6 +5,7 @@ import Button from "../../components/ui/Button";
 import { useAuthStore } from "../../store/useAuthStore";
 import { eliminarCliente } from "../../api/clienteService";
 import { useNavigate } from "react-router-dom";
+import { enviarMailTexto } from "../../api/mailService";
 
 export const DeleteProfile = () => {
   const { user, logout } = useAuthStore();
