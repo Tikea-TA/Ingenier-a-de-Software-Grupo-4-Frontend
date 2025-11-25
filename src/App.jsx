@@ -10,6 +10,13 @@ import { DeleteProfile } from "./pages/usuarios/DeleteProfile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
 import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
+import { EventosDisponibles } from "./pages/Ventas/EventosDisponibles";
+import { SeleccionAsientos } from "./pages/Ventas/SeleccionAsientos";
+import { ResumenCompra } from "./pages/Ventas/ResumenCompra";
+import { PantallaPago } from "./pages/Ventas/PantallaPago";
+import { ConfirmacionCompra } from "./pages/Ventas/ConfirmacionCompra";
+import { MisEntradas } from "./pages/Ventas/MisEntradas";
+import { DetalleEntrada } from "./pages/Ventas/DetalleEntrada";
 
 function App() {
   return (
@@ -19,11 +26,22 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          
+          {/* Rutas de venta de entradas (públicas) */}
+          <Route path="/eventos" element={<EventosDisponibles />} />
+          <Route path="/comprar-entradas/:eventId" element={<SeleccionAsientos />} />
+          <Route path="/resumen-compra" element={<ResumenCompra />} />
+          <Route path="/pago" element={<PantallaPago />} />
+          <Route path="/confirmacion-compra" element={<ConfirmacionCompra />} />
+          
           {/* Rutas protegidas */}
           <Route element={<ProtectedRoute />}>
             <Route path="/user/configprofile" element={<ConfigProfile />} />
             <Route path="/user/deleteprofile" element={<DeleteProfile />} />
+            <Route path="/mis-entradas" element={<MisEntradas />} />
+            <Route path="/detalle-entrada/:numeroCompra" element={<DetalleEntrada />} />
           </Route>
+          
           <Route path="/registrarProductor" element={<RegistrarProductor />} />
           <Route path="/registrarLocal" element={<RegistrarLocal />} />
           <Route path="/registrarEvento" element={<RegistrarEvento />} />

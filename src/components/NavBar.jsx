@@ -32,7 +32,7 @@ export default function Navbar() {
 
           {/* Navegación principal */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="#" className="text-sm transition hover:text-primary">
+            <Link to="/eventos" className="text-sm transition hover:text-primary">
               Explorar Eventos
             </Link>
             <Link
