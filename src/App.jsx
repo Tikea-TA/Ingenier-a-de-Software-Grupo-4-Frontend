@@ -11,6 +11,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
 import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
 import { ValidarLocales } from "./pages/Admin/ValidarLocales";
+import { ValidarProductores } from "./pages/Admin/ValidarProductores";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/registrarEvento" element={<RegistrarEvento />} />
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
           <Route path="/admin/validar-locales" element={<ValidarLocales />} />
+          <Route path="/admin/validar-productores" element={<ValidarProductores />} />
         </Route>
       </Routes>
     </>
