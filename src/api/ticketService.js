@@ -20,9 +20,21 @@ export const obtenerAsientosDisponibles = async (eventId) => {
   return data;
 };
 
+// Obtener asientos por zona (usa controlador de asientos)
+export const obtenerAsientosPorZona = async (zonaId) => {
+  const { data } = await api.get(`/asientos/zona/${zonaId}`);
+  return data;
+};
+
 // Obtener zonas disponibles de un evento
 export const obtenerZonasDisponibles = async (eventId) => {
   const { data } = await api.get(`/eventos/${eventId}/zonas`);
+  return data;
+};
+
+// Obtener zonas por establecimiento (usa controlador de zonas)
+export const obtenerZonasPorEstablecimiento = async (establecimientoId) => {
+  const { data } = await api.get(`/zonas/establecimiento/${establecimientoId}/activas`);
   return data;
 };
 

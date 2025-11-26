@@ -5,7 +5,7 @@ import { ArrowLeft, Lock, AlertCircle } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { useCartStore } from "../../store/useCartStore";
 import { useAuthStore } from "../../store/useAuthStore";
-import { crearReserva, crearTicket } from "../../api/ticketService";
+import { crearReserva, crearTicket, obtenerTicketsPorEvento } from "../../api/ticketService";
 
 export const PantallaPago = () => {
   const navigate = useNavigate();
@@ -132,48 +132,158 @@ export const PantallaPago = () => {
     try {
       setIsProcessing(true);
 
-      // Paso 1: Crear reserva (temporal)
-      const reservaPayload = {
-        idCliente: user?.id,
-        idEvento: summary.eventId,
-        asientos: items
-          .filter((item) => item.type === "seat")
-          .map((item) => ({
-            numero: item.seatNumber,
-            tipoEntrada: item.tipoEntradaId,
-          })),
-        zonas: items
-          .filter((item) => item.type === "zone")
-          .map((item) => ({
-            idZona: item.zoneId,
-            tipoEntrada: item.tipoEntradaId,
-            cantidad: item.quantity || 1,
-          })),
-        montoTotal: summary.total,
-        descuentoAplicado: summary.discount || 0,
-        codigoPromocion: summary.discountCode || null,
-      };
+        // Determinar idEvento: preferir summary.eventId, si no está, derivar del primer item
+        const eventIdForReserva = summary.eventId || (items && items.length > 0 ? items[0].eventId : null);
+        if (!eventIdForReserva) {
+          setError("No se pudo determinar el evento para la reserva. Intenta desde la pantalla de selección de entradas.");
+          setIsProcessing(false);
+          return;
+        }
+
+        // Determinar idCliente a partir del user (varias formas posibles según el backend)
+        const clientId =
+          user?.id ||
+          user?.idCliente ||
+          user?.clienteId ||
+          user?.id_usuario ||
+          user?.idUsuario ||
+          null;
+
+        if (!clientId) {
+          setError("No se pudo determinar el cliente (id). Vuelve a iniciar sesión e intenta de nuevo.");
+          setIsProcessing(false);
+          return;
+        }
+
+        // Paso 1: Crear reserva (temporal)
+        const reservaPayload = {
+          idCliente: clientId,
+          idEvento: eventIdForReserva,
+          asientos: items
+            .filter((item) => item.type === "seat")
+            .map((item) => ({
+              idAsiento: item.seatId || null,
+              numero: item.seatNumber || null,
+              tipoEntrada: item.tipoEntradaId ? Number(item.tipoEntradaId) : null,
+            })),
+          zonas: items
+            .filter((item) => item.type === "zone")
+            .map((item) => ({
+              idZona: item.zoneId ? Number(item.zoneId) : null,
+              tipoEntrada: item.tipoEntradaId ? Number(item.tipoEntradaId) : null,
+              cantidad: Number(item.quantity || 1),
+            })),
+          montoTotal: summary.total,
+          descuentoAplicado: summary.discount || 0,
+          codigoPromocion: summary.discountCode || null,
+        };
 
       const reserva = await crearReserva(reservaPayload);
       console.log("Reserva creada:", reserva);
 
-      // Paso 2: Crear tickets (después de confirmación de pago)
-      const ticketsPayload = items.map((item) => ({
-        idReserva: reserva.idReserva,
-        idCliente: user?.id,
-        idEvento: summary.eventId,
-        idZona: item.zoneId || null,
-        numeroAsiento: item.seatNumber || null,
-        tipoEntrada: item.tipoEntrada,
-        precio: item.price,
-        estado: "DISPONIBLE", // Estado inicial del ticket
-        fechaCompra: new Date().toISOString(),
-        codigoQR: `${reserva.idReserva}-${item.id}`, // Formato básico, el backend generará uno real
-      }));
+      // Paso 2: Consultar tickets existentes y crear tickets (después de confirmación de pago)
+      // Obtener tickets ya creados para el evento para evitar duplicados por asiento
+      let existingTickets = [];
+      try {
+        existingTickets = await obtenerTicketsPorEvento(eventIdForReserva);
+      } catch (e) {
+        console.warn("No se pudieron obtener tickets existentes para el evento:", e);
+        existingTickets = [];
+      }
 
-      // Crear todos los tickets
-      for (const ticketData of ticketsPayload) {
-        await crearTicket(ticketData);
+      const existingAsientoIds = new Set(
+        (existingTickets || [])
+          .map((t) => t.asientoId)
+          .filter((v) => v !== null && v !== undefined)
+      );
+
+      // Construir payloads usando los nombres esperados por el backend (DTO TicketRequest)
+      const ticketsPayload = items
+        // clonar y normalizar
+        .map((item) => ({ ...item }))
+        // deduplicar por asientoId (si aplica)
+        .filter((v, i, arr) => {
+          if (v.type === "seat") {
+            const firstIndex = arr.findIndex((x) => x.seatId === v.seatId);
+            return firstIndex === i;
+          }
+          return true;
+        })
+        .map((item) => {
+        // construir una cadena única y convertirla a base64. Garantizar valor no nulo.
+        const baseSeed = `${reserva.idReserva}-${item.zoneId ?? item.seatId ?? item.id ?? ""}-${Date.now()}`;
+        let base64Code = null;
+        try {
+          if (typeof window !== "undefined" && typeof window.btoa === "function") {
+            base64Code = window.btoa(baseSeed);
+          } else if (typeof Buffer !== "undefined") {
+            base64Code = Buffer.from(baseSeed).toString("base64");
+          } else {
+            // Fallback simple: encodeURIComponent -> unescape -> btoa-like
+            base64Code = window && window.btoa ? window.btoa(unescape(encodeURIComponent(baseSeed))) : baseSeed;
+          }
+        } catch (e) {
+          // En caso de fallo inesperado, garantizar al menos una cadena
+          base64Code = `${reserva.idReserva}-${item.id || ""}-${Date.now()}`;
+        }
+
+        return {
+          reservaId: reserva.idReserva,
+          clienteId: clientId,
+          eventoId: eventIdForReserva,
+          zonaId: item.zoneId ? Number(item.zoneId) : null,
+          asientoId: item.seatId ? Number(item.seatId) : null,
+          // El backend espera un TipoTicket (enum). Usamos 'QR' por defecto para la simulación.
+          tipo: "QR",
+          precioCompra: item.price != null ? Number(item.price) : 0,
+          descuentoAplicado: 0,
+          estado: "DISPONIBLE",
+          puntosGanados: 0,
+          comision: 0,
+          // Proveer un código base64 en la clave `codigoBase64` — el backend actual lee ese campo
+          codigoBase64: base64Code,
+          // Enviar `codigo` como base64 string (Jackson lo decodifica a byte[]) para evitar NPE en backend
+          codigo: base64Code,
+        };
+      });
+
+      // Filtrar ticketsPayload para omitir asientos que ya tienen ticket (evitar Duplicate entry)
+      const ticketsToCreate = ticketsPayload.filter((t) => {
+        if (t.asientoId != null) {
+          return !existingAsientoIds.has(Number(t.asientoId));
+        }
+        return true;
+      });
+
+      if (ticketsToCreate.length !== ticketsPayload.length) {
+        console.warn("Omitiendo creación de tickets já creados para algunos asientos.");
+      }
+
+      // Log payloads para diagnóstico
+      console.debug("ticketsPayload", ticketsPayload);
+
+      // Crear todos los tickets y capturar errores individuales
+      for (const ticketData of ticketsToCreate) {
+        try {
+          console.debug("Creando ticket:", ticketData);
+          await crearTicket(ticketData);
+        } catch (ticketErr) {
+          // Intentar extraer información útil del error del servidor
+          const serverData = ticketErr?.response?.data;
+          console.error("Error creando ticket", ticketData, ticketErr, serverData);
+
+          // Mostrar mensaje detallado al usuario (stringify server data si existe)
+          const serverMsg = serverData
+            ? typeof serverData === "string"
+              ? serverData
+              : JSON.stringify(serverData)
+            : ticketErr.message;
+
+          setApiError(
+            `Error creando ticket: ${serverMsg}` ||
+              "Error al crear uno de los tickets. Revisa la consola para más detalles."
+          );
+        }
       }
 
       // Guardar datos en sessionStorage
@@ -183,9 +293,12 @@ export const PantallaPago = () => {
         email: datosComprador.email,
         nombreComprador: datosComprador.nombre,
         telefono: datosComprador.telefono,
-        montoTotal: summary.total,
-        descuento: summary.discount || 0,
-        asientos: items,
+        montoTotal: Number(summary.total ?? summary.totalPrice ?? summary.subtotal ?? 0),
+        descuento: Number(summary.discount || 0),
+        asientos: items.map((it) => ({
+          ...it,
+          precio: Number(it.price || it.precio || 0),
+        })),
         evento: {
           nombre: summary.eventName,
           fechaHora: summary.eventDate,

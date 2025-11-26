@@ -51,7 +51,8 @@ export const EventosDisponibles = () => {
     // Filtrar por tipo
     if (tipoFiltro !== "todos") {
       filtered = filtered.filter(
-        (evento) => evento.tipoEvento?.toLowerCase() === tipoFiltro.toLowerCase()
+        (evento) =>
+          evento.categoria?.toLowerCase() === tipoFiltro.toLowerCase()
       );
     }
 
@@ -59,9 +60,9 @@ export const EventosDisponibles = () => {
   }, [searchTerm, tipoFiltro, eventos]);
 
   const handleComprarEntradas = (evento) => {
-    clearCart();
+    // No borrar el carrito al navegar entre eventos: permitir agregar entradas de distintos eventos
     setEventInfo(evento);
-    navigate(`/comprar-entradas/${evento.id}`);
+    navigate(`/comprar-entradas/${evento.idEvento}`);
   };
 
   const formatDate = (dateString) => {
@@ -177,7 +178,7 @@ export const EventosDisponibles = () => {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredEventos.map((evento) => (
               <div
-                key={evento.id}
+                key={evento.idEvento}
                 className="group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50 transition-all hover:border-zinc-700 hover:shadow-lg hover:shadow-primary/10"
               >
                 {/* Imagen del evento */}
@@ -185,7 +186,7 @@ export const EventosDisponibles = () => {
                   <div className="aspect-video overflow-hidden bg-zinc-800">
                     <img
                       src={evento.banner}
-                      alt={evento.nombre}
+                      alt={evento.nombreEvento}
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
                   </div>
@@ -194,7 +195,7 @@ export const EventosDisponibles = () => {
                 <div className="p-4 space-y-3">
                   {/* Nombre del evento */}
                   <h3 className="text-lg font-semibold line-clamp-2">
-                    {evento.nombre}
+                    {evento.nombreEvento}
                   </h3>
 
                   {/* Detalles */}
@@ -202,19 +203,19 @@ export const EventosDisponibles = () => {
                     <div className="flex items-start gap-2">
                       <Calendar className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
                       <span className="line-clamp-2">
-                        {formatDate(evento.fechaHora)}
+                        {formatDate(evento.fecha)}
                       </span>
                     </div>
 
                     <div className="flex items-start gap-2">
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-                      <span className="line-clamp-2">{evento.local}</span>
+                      <span className="line-clamp-2">{evento.establecimiento.nombreEstablecimiento}</span>
                     </div>
 
-                    {evento.capacidadMaximaEvento && (
+                    {evento.aforoTotal && (
                       <div className="flex items-start gap-2">
                         <Users className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-                        <span>Capacidad: {evento.capacidadMaximaEvento}</span>
+                        <span>Capacidad: {evento.aforoTotal}</span>
                       </div>
                     )}
                   </div>

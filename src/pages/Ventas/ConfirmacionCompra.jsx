@@ -62,6 +62,8 @@ export const ConfirmacionCompra = () => {
     email: compra.email,
   });
 
+  const totalPagado = Number(compra.montoTotal ?? compra.total ?? compra.totalPrice ?? 0);
+
   return (
     <main className="min-h-screen bg-background-dark text-text">
       {/* Fondo animado */}
@@ -130,9 +132,9 @@ export const ConfirmacionCompra = () => {
 
                 <div>
                   <p className="text-sm text-subtle mb-1">Total Pagado</p>
-                  <p className="text-2xl font-bold text-primary">
-                    S/ {compra.montoTotal.toFixed(2)}
-                  </p>
+                    <p className="text-2xl font-bold text-primary">
+                      S/ {totalPagado.toFixed(2)}
+                    </p>
                 </div>
 
                 {/* Botones de descarga */}
@@ -186,7 +188,7 @@ export const ConfirmacionCompra = () => {
                       </p>
                     </div>
                     <p className="text-primary font-bold">
-                      S/ {asiento.precio.toFixed(2)}
+                      S/ {Number(asiento.precio || asiento.price || 0).toFixed(2)}
                     </p>
                   </div>
                 ))}
