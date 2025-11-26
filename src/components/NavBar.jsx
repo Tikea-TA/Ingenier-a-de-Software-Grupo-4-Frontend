@@ -19,6 +19,9 @@ export default function Navbar() {
     user?.nombreUser ||
     (user?.correo ? user.correo.split("@")[0] : "Usuario");
 
+  // Lógica para mostrar el botón de administración
+  const showAdminLocales = user?.areaGestion === "EVENTOS" || user?.areaGestion === "ADMINISTRADOR";
+
   return (
     <header className="border-b border-zinc-800 bg-background-dark text-zinc-100">
       <div className="relative flex h-16 items-center justify-between px-4 md:px-10">
@@ -35,12 +38,23 @@ export default function Navbar() {
             <Link to="#" className="text-sm transition hover:text-primary">
               Explorar Eventos
             </Link>
+            
             <Link
               to="/registrarProductor"
               className="text-sm transition hover:text-primary"
             >
               Colabora con nosotros
             </Link>
+
+            {/* ENLACE CONDICIONAL: Administración Locales */}
+            {showAdminLocales && (
+              <Link
+                to="/admin/validar-locales"
+                className="text-sm transition hover:text-primary"
+              >
+                Administración locales
+              </Link>
+            )}
           </nav>
         </div>
 

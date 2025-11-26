@@ -10,6 +10,7 @@ import { DeleteProfile } from "./pages/usuarios/DeleteProfile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
 import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
+import { ValidarLocales } from "./pages/Admin/ValidarLocales";
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
           <Route path="/registrarLocal" element={<RegistrarLocal />} />
           <Route path="/registrarEvento" element={<RegistrarEvento />} />
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
+          <Route path="/admin/validar-locales" element={<ValidarLocales />} />
         </Route>
       </Routes>
     </>
