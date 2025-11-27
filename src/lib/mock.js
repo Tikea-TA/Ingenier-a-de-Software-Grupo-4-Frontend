@@ -116,7 +116,7 @@ export const ListaLocales = [
             "planta_baja": {
                 "idZona": "planta_baja",
                 "nombreZona": "PLANTA_BAJA",
-                "estado": "selected",
+                "estado": "available",
                 "habilitada": true,
                 "tieneDistribucionAsientos": true,
                 "mapaAsientos": {
