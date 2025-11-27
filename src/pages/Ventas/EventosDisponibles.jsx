@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Heading, Text, Flex, Separator } from "@radix-ui/themes";
 import { Search, Calendar, MapPin, Users } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { obtenerEventosDisponibles } from "../../api/ticketService";
 import { useCartStore } from "../../store/useCartStore";
+import { obtenerBannerPorEvento } from "../../api/ticketService";
 
 export const EventosDisponibles = () => {
   const navigate = useNavigate();
@@ -18,13 +19,55 @@ export const EventosDisponibles = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState("todos");
 
+  // Cache local para banners ya cargados (performance ++)
+  const bannerCache = useRef({});
+
   useEffect(() => {
     const cargarEventos = async () => {
       try {
         setIsLoading(true);
         const data = await obtenerEventosDisponibles();
-        setEventos(data || []);
-        setFilteredEventos(data || []);
+
+        if (!data) {
+          setEventos([]);
+          setFilteredEventos([]);
+          return;
+        }
+
+        // 1. Mostrar eventos sin banners inmediatamente
+        const eventosIniciales = data.map((e) => ({ ...e, banner: null }));
+        setEventos(eventosIniciales);
+        setFilteredEventos(eventosIniciales);
+
+        // 2. Cargar banners en paralelo sin bloquear el render
+        const eventosConBanners = await Promise.all(
+          eventosIniciales.map(async (evento) => {
+            if (bannerCache.current[evento.idEvento]) {
+              return {
+                ...evento,
+                banner: bannerCache.current[evento.idEvento],
+              };
+            }
+
+            try {
+              const bannerUrl = await obtenerBannerPorEvento(evento.idEvento);
+
+              // Guardar en cache
+              bannerCache.current[evento.idEvento] = bannerUrl;
+
+              return { ...evento, banner: bannerUrl };
+            } catch (err) {
+              console.warn(
+                "Error cargando banner para evento",
+                evento.idEvento
+              );
+              return { ...evento, banner: null };
+            }
+          })
+        );
+
+        setEventos(eventosConBanners);
+        setFilteredEventos(eventosConBanners);
       } catch (err) {
         setError("No se pudieron cargar los eventos. Intenta nuevamente.");
         console.error(err);
@@ -51,8 +94,7 @@ export const EventosDisponibles = () => {
     // Filtrar por tipo
     if (tipoFiltro !== "todos") {
       filtered = filtered.filter(
-        (evento) =>
-          evento.categoria?.toLowerCase() === tipoFiltro.toLowerCase()
+        (evento) => evento.categoria?.toLowerCase() === tipoFiltro.toLowerCase()
       );
     }
 
@@ -209,7 +251,9 @@ export const EventosDisponibles = () => {
 
                     <div className="flex items-start gap-2">
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-                      <span className="line-clamp-2">{evento.establecimiento.nombreEstablecimiento}</span>
+                      <span className="line-clamp-2">
+                        {evento.establecimiento.nombreEstablecimiento}
+                      </span>
                     </div>
 
                     {evento.aforoTotal && (
