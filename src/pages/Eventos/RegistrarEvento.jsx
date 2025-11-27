@@ -9,7 +9,7 @@ import {
   Dialog,
 } from "@radix-ui/themes";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
-import { useCallback, useMemo, useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 
@@ -72,19 +72,21 @@ export const RegistrarEvento = () => {
     {
       id: 1,
       nombre: "",
+      tipo: "",
       precio: "",
       tipoComision: "FIJO",
       valorComision: "",
       asientosPorZona: {},
+      cantidadesPorZona: {},
     },
   ]);
 
   const [tipoEntradaSeleccionadaId, setTipoEntradaSeleccionadaId] = useState(1);
 
-  const [bannerName, setBannerName] = useState("");
   const [bannerBase64, setBannerBase64] = useState("");
-  const [docName, setDocName] = useState("");
+  const [bannerName, setBannerName] = useState("");
   const [docBase64, setDocBase64] = useState("");
+  const [docName, setDocName] = useState("");
 
   const handleChangeTipoEvento = (value) => setTipoEventoSeleccionado(value);
 
@@ -153,7 +155,11 @@ export const RegistrarEvento = () => {
     setSeatMapZonaConfig(null);
 
     setTiposEntrada((prev) =>
-      prev.map((t) => ({ ...t, asientosPorZona: {} }))
+      prev.map((t) => ({
+        ...t,
+        asientosPorZona: {},
+        cantidadesPorZona: {},
+      }))
     );
   };
 
@@ -165,10 +171,12 @@ export const RegistrarEvento = () => {
         {
           id: newId,
           nombre: "",
+          tipo: "",
           precio: "",
           tipoComision: "FIJO",
           valorComision: "",
           asientosPorZona: {},
+          cantidadesPorZona: {},
         },
       ];
       setTipoEntradaSeleccionadaId(newId);
@@ -210,25 +218,88 @@ export const RegistrarEvento = () => {
         String(t.precio).trim() &&
         String(t.valorComision).trim()
     );
-    if (!tiposValidos)
+    if (!tiposValidos) {
       newErrors.tiposEntrada =
         "Completa nombre, precio y comisión en todos los tipos.";
+    }
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
+
+    const capacidadEventoNum = Number(capacidadMaximaEvento);
+    if (!Number.isFinite(capacidadEventoNum) || capacidadEventoNum <= 0) {
+      setErrors((prev) => ({
+        ...prev,
+        capacidadEvento: "Ingresa una capacidad válida.",
+      }));
+      return;
+    }
+
+    if (capacidadMaximaLocal != null) {
+      const capacidadLocalNum = Number(capacidadMaximaLocal);
+      if (
+        Number.isFinite(capacidadLocalNum) &&
+        capacidadEventoNum > capacidadLocalNum
+      ) {
+        setErrors((prev) => ({
+          ...prev,
+          capacidadEvento: `La capacidad del evento (${capacidadEventoNum}) supera la capacidad máxima del local (${capacidadLocalNum}). Ajusta el aforo del evento.`,
+        }));
+        return;
+      }
+    }
+
+    let totalAsignado = 0;
+
+    tiposEntrada.forEach((t) => {
+      if (t.asientosPorZona) {
+        Object.values(t.asientosPorZona).forEach((arr) => {
+          if (Array.isArray(arr)) {
+            totalAsignado += arr.length;
+          }
+        });
+      }
+      if (t.cantidadesPorZona) {
+        Object.values(t.cantidadesPorZona).forEach((val) => {
+          const n = parseInt(val, 10);
+          if (Number.isFinite(n) && n > 0) {
+            totalAsignado += n;
+          }
+        });
+      }
+    });
+
+    if (totalAsignado > capacidadEventoNum) {
+      setErrors((prev) => ({
+        ...prev,
+        aforoAsignado: `La cantidad total de asientos asignados (${totalAsignado}) supera la capacidad máxima del evento (${capacidadEventoNum}). Ajusta la asignación para continuar.`,
+      }));
+      return;
+    }
+
+    if (totalAsignado < capacidadEventoNum) {
+      const continuar = window.confirm(
+        `Has asignado ${totalAsignado} asientos de una capacidad máxima de ${capacidadEventoNum}. ¿Deseas continuar sin completar el aforo?`
+      );
+      if (!continuar) {
+        return;
+      }
+    }
 
     const payload = {
       nombreEvento: nombreEvento.trim(),
       fechaHora,
       idLocal: localSeleccionado,
       tipoEvento: tipoEventoSeleccionado,
-      capacidadMaximaEvento: Number(capacidadMaximaEvento),
+      capacidadMaximaEvento: capacidadEventoNum,
       tiposEntrada: tiposEntrada.map((t) => ({
         nombre: t.nombre.trim(),
+        tipo: t.tipo,
         precio: Number(t.precio),
         tipoComision: t.tipoComision,
         valorComision: Number(t.valorComision),
         asientosPorZona: t.asientosPorZona || {},
+        cantidadesPorZona: t.cantidadesPorZona || {},
       })),
       bannerBase64,
       documentacionBase64: docBase64,
@@ -266,20 +337,20 @@ export const RegistrarEvento = () => {
 
       const zonaCfg = configLocalSeleccionado.zonas[zonaId];
 
+      setSeatMapZonaId(zonaId);
+
       if (zonaCfg?.tieneDistribucionAsientos && zonaCfg?.mapaAsientos) {
         const { filas, columnas, asientosBloqueados = [] } =
           zonaCfg.mapaAsientos;
 
         const baseBlocked = asientosBloqueados.map((a) => [a.fila, a.columna]);
 
-        setSeatMapZonaId(zonaId);
         setSeatMapZonaConfig({
           rows: filas,
           cols: columnas,
           baseBlocked,
         });
       } else {
-        setSeatMapZonaId(null);
         setSeatMapZonaConfig(null);
       }
     },
@@ -351,6 +422,43 @@ export const RegistrarEvento = () => {
     tipoEntradaSeleccionadaId,
     currentSeatSelection,
   ]);
+
+  const currentQuantityForZone = useMemo(() => {
+    if (!seatMapZonaId) return "";
+    const tipo = tiposEntrada.find((t) => t.id === tipoEntradaSeleccionadaId);
+    if (!tipo || !tipo.cantidadesPorZona) return "";
+    const v = tipo.cantidadesPorZona[seatMapZonaId];
+    return v != null ? String(v) : "";
+  }, [tiposEntrada, tipoEntradaSeleccionadaId, seatMapZonaId]);
+
+  const handleCantidadZonaChange = useCallback(
+    (value) => {
+      if (!seatMapZonaId || !tipoEntradaSeleccionadaId) return;
+      const onlyDigits = value.replace(/\D/g, "");
+      setTiposEntrada((prev) =>
+        prev.map((t) => {
+          if (t.id !== tipoEntradaSeleccionadaId) return t;
+          const prevMap = t.cantidadesPorZona || {};
+          return {
+            ...t,
+            cantidadesPorZona: {
+              ...prevMap,
+              [seatMapZonaId]: onlyDigits,
+            },
+          };
+        })
+      );
+    },
+    [seatMapZonaId, tipoEntradaSeleccionadaId]
+  );
+
+  const currentZonaNombre = useMemo(() => {
+    if (!seatMapZonaId || !configLocalSeleccionado?.zonas) {
+      return seatMapZonaId || "";
+    }
+    const zonaCfg = configLocalSeleccionado.zonas[seatMapZonaId];
+    return zonaCfg?.nombreZona || seatMapZonaId;
+  }, [seatMapZonaId, configLocalSeleccionado]);
 
   return (
     <main className="min-h-screen bg-background-dark text-text">
@@ -427,14 +535,19 @@ export const RegistrarEvento = () => {
                         className="w-[var(--radix-select-trigger-width)]"
                       >
                         {ListaLocales.map((loc) => (
-                          <Select.Item key={loc.idLocal} value={String(loc.idLocal)}>
+                          <Select.Item
+                            key={loc.idLocal}
+                            value={String(loc.idLocal)}
+                          >
                             {loc.nombreEstablecimiento}
                           </Select.Item>
                         ))}
                       </Select.Content>
                     </Select.Root>
                     {errors.localSeleccionado && (
-                      <p className="text-sm text-red-400">{errors.localSeleccionado}</p>
+                      <p className="text-sm text-red-400">
+                        {errors.localSeleccionado}
+                      </p>
                     )}
                   </div>
 
@@ -442,7 +555,11 @@ export const RegistrarEvento = () => {
                     <label className="text-sm font-medium">
                       Capacidad máxima del local
                     </label>
-                    <TextField.Root value={capacidadMaximaLocal ?? ""} readOnly size="3" />
+                    <TextField.Root
+                      value={capacidadMaximaLocal ?? ""}
+                      readOnly
+                      size="3"
+                    />
                   </div>
 
                   <div className="space-y-1">
@@ -461,7 +578,14 @@ export const RegistrarEvento = () => {
                       size="3"
                     />
                     {errors.capacidadEvento && (
-                      <p className="text-sm text-red-400">{errors.capacidadEvento}</p>
+                      <p className="text-sm text-red-400">
+                        {errors.capacidadEvento}
+                      </p>
+                    )}
+                    {errors.aforoAsignado && (
+                      <p className="text-sm text-red-400">
+                        {errors.aforoAsignado}
+                      </p>
                     )}
                   </div>
 
@@ -504,7 +628,8 @@ export const RegistrarEvento = () => {
                 <Heading size="3">Tipos de entradas</Heading>
                 <Text size="2" color="var(--color-text)">
                   Configura los tipos de entradas, precios y comisión por
-                  entrada. Selecciona una para editarla y asignar asientos.
+                  entrada. Selecciona una para editarla y asignar asientos o
+                  cantidades por zona.
                 </Text>
 
                 <div className="space-y-3">
@@ -674,6 +799,10 @@ export const RegistrarEvento = () => {
                   <Separator my="2" size="4" />
                   <div className="space-y-3">
                     <Heading size="3">Mapa del local seleccionado</Heading>
+                    <Text size="2" color="var(--color-text)">
+                      Selecciona una zona y configura asientos o cantidades
+                      para el tipo de entrada seleccionado.
+                    </Text>
 
                     <div className="rounded-xl border border-zinc-800/70 p-4 space-y-4">
                       {tipoLocalSeleccionado === "ESTADIO" && (
@@ -712,40 +841,32 @@ export const RegistrarEvento = () => {
                       )}
                     </div>
 
-                    {seatMapZonaConfig && (
-                      <div className="rounded-xl border border-zinc-800/70 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Heading size="3">
-                            Distribución de asientos - {seatMapZonaId}
-                          </Heading>
-                          <Button
-                            type="button"
-                            variant="gray"
-                            onClick={() => {
-                              setSeatMapZonaId(null);
-                              setSeatMapZonaConfig(null);
-                            }}
-                          >
-                            Cerrar mapa
-                          </Button>
-                        </div>
+                    {seatMapZonaId && seatMapZonaConfig && (
+                      <ZonaConMapa
+                        seatMapZonaId={seatMapZonaId}
+                        seatMapZonaConfig={seatMapZonaConfig}
+                        currentZonaNombre={currentZonaNombre}
+                        tipoEntradaSeleccionadaId={tipoEntradaSeleccionadaId}
+                        currentSeatSelection={currentSeatSelection}
+                        dynamicBlocked={dynamicBlocked}
+                        onClose={() => {
+                          setSeatMapZonaId(null);
+                          setSeatMapZonaConfig(null);
+                        }}
+                        onSeatChange={handleSeatSelectionChange}
+                      />
+                    )}
 
-                        <Text size="2" color="var(--color-text)">
-                          Selecciona los asientos correspondientes a esta zona
-                          para el tipo de entrada seleccionado.
-                        </Text>
-
-                        <SeatMapSelector
-                          key={`${seatMapZonaId}-${tipoEntradaSeleccionadaId}`}
-                          seatConfig={{
-                            rows: seatMapZonaConfig.rows,
-                            cols: seatMapZonaConfig.cols,
-                            blocked: dynamicBlocked,
-                          }}
-                          initialSelected={currentSeatSelection}
-                          onChange={handleSeatSelectionChange}
-                        />
-                      </div>
+                    {seatMapZonaId && !seatMapZonaConfig && (
+                      <ZonaSinMapa
+                        currentZonaNombre={currentZonaNombre}
+                        currentQuantityForZone={currentQuantityForZone}
+                        onCantidadChange={handleCantidadZonaChange}
+                        onClear={() => {
+                          setSeatMapZonaId(null);
+                          setSeatMapZonaConfig(null);
+                        }}
+                      />
                     )}
                   </div>
                 </>
@@ -815,6 +936,82 @@ export const RegistrarEvento = () => {
         </Dialog.Content>
       </Dialog.Root>
     </main>
+  );
+};
+
+const ZonaConMapa = ({
+  seatMapZonaId,
+  seatMapZonaConfig,
+  currentZonaNombre,
+  tipoEntradaSeleccionadaId,
+  currentSeatSelection,
+  dynamicBlocked,
+  onClose,
+  onSeatChange,
+}) => {
+  return (
+    <div className="rounded-xl border border-zinc-800/70 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <Heading size="3">
+          Distribución de asientos - {currentZonaNombre}
+        </Heading>
+        <Button type="button" variant="gray" onClick={onClose}>
+          Cerrar mapa
+        </Button>
+      </div>
+
+      <Text size="2" color="var(--color-text)">
+        Selecciona los asientos correspondientes a esta zona para el tipo de
+        entrada seleccionado.
+      </Text>
+
+      <SeatMapSelector
+        key={`${seatMapZonaId}-${tipoEntradaSeleccionadaId}`}
+        seatConfig={{
+          rows: seatMapZonaConfig.rows,
+          cols: seatMapZonaConfig.cols,
+          blocked: dynamicBlocked,
+        }}
+        initialSelected={currentSeatSelection}
+        onChange={onSeatChange}
+      />
+    </div>
+  );
+};
+
+const ZonaSinMapa = ({
+  currentZonaNombre,
+  currentQuantityForZone,
+  onCantidadChange,
+  onClear,
+}) => {
+  return (
+    <div className="rounded-xl border border-zinc-800/70 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <Heading size="3">Aforo por zona - {currentZonaNombre}</Heading>
+        <Button type="button" variant="gray" onClick={onClear}>
+          Limpiar selección
+        </Button>
+      </div>
+
+      <Text size="2" color="var(--color-text)">
+        Esta zona no tiene un mapa de asientos configurado. Ingresa la
+        cantidad de entradas del tipo seleccionado que se asignarán a esta
+        zona.
+      </Text>
+
+      <div className="space-y-1 max-w-xs">
+        <label className="text-sm font-medium">
+          Cantidad de entradas para esta zona
+        </label>
+        <TextField.Root
+          inputMode="numeric"
+          value={currentQuantityForZone}
+          onChange={(e) => onCantidadChange(e.target.value)}
+          size="3"
+        />
+      </div>
+    </div>
   );
 };
 
