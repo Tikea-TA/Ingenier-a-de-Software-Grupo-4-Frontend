@@ -9,6 +9,7 @@ import { ConfigProfile } from "./pages/usuarios/ConfigProfile";
 import { DeleteProfile } from "./pages/usuarios/DeleteProfile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
+import { EditarPromocion } from "./pages/Promociones/EditarPromocion";
 import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
 import { EventosDisponibles } from "./pages/Ventas/EventosDisponibles";
 import { SeleccionAsientos } from "./pages/Ventas/SeleccionAsientos";
@@ -48,6 +49,7 @@ function App() {
           <Route path="/registrarLocal" element={<RegistrarLocal />} />
           <Route path="/registrarEvento" element={<RegistrarEvento />} />
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
+          <Route path="/promocion/editar/:id" element={<EditarPromocion />} />
 
           <Route path="/test-productor-20" element={<TestProductorEvents />} />
           <Route path="/eventos/detalle/:id" element={<DetalleEvento />} />
