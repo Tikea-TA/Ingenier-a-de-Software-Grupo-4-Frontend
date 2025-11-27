@@ -700,24 +700,7 @@ export const RegistrarEvento = () => {
                               size="3"
                               onClick={(e) => e.stopPropagation()}
                             />
-<<<<<<< HEAD
-                            <Select.Content
-                              position="popper"
-                              sideOffset={4}
-                              className="w-(--radix-select-trigger-width)"
-                            >
-                              <Select.Item value="FIJO">
-                                Precio fijo (S/)
-                              </Select.Item>
-                              <Select.Item value="PORCENTAJE">
-                                Porcentaje (%)
-                              </Select.Item>
-                            </Select.Content>
-                          </Select.Root>
-                        </div>
-=======
                           </div>
->>>>>>> main
 
                           <div className="space-y-1">
                             <label className="text-sm font-medium">

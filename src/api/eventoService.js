@@ -1,13 +1,7 @@
 import api from "./axiosConfig";
 
-<<<<<<< HEAD
 export const obtenerTodosEventos = async () => {
   const { data } = await api.get("/eventos");
-  return data;
-};
-
-export const registrarEvento = async (payload) => {
-  const { data } = await api.post("/eventos/registro", payload);
   return data;
 };
 
@@ -49,7 +43,9 @@ export const obtenerEventosPorFecha = async (fecha) => {
 export const obtenerEventosPorRangoFechas = async (fechaInicio, fechaFin) => {
   const { data } = await api.get("/eventos/fechas", {
     params: { fechaInicio, fechaFin },
-=======
+  });
+  return data;
+};
 // Registrar
 export const registrarEvento = async (formData) => {
   const { data } = await api.post("/eventos/registro", formData);
@@ -58,7 +54,7 @@ export const registrarEvento = async (formData) => {
 
 // Obtener pendientes
 export const obtenerEventosPendientes = async (idGestor) => {
-  const endpoint = idGestor 
+  const endpoint = idGestor
     ? `/eventos/gestor/${idGestor}/pendientes`
     : `/eventos/gestor/0/pendientes`;
   const { data } = await api.get(endpoint);
@@ -69,12 +65,10 @@ export const obtenerEventosPendientes = async (idGestor) => {
 export const validarEvento = async (idEvento, nuevoEstado) => {
   const { data } = await api.put(`/eventos/${idEvento}/validacion`, null, {
     params: { nuevoEstado }
->>>>>>> main
   });
   return data;
 };
 
-<<<<<<< HEAD
 export const obtenerEventosActivos = async () => {
   const { data } = await api.get("/eventos/activos");
   return data;
@@ -93,7 +87,8 @@ export const eliminarEvento = async (idEvento) => {
 export const generarReporteDetalladoDeEventos = async (payload) => {
   const { data } = await api.post("/eventos/eventosReporte", payload);
   return data;
-=======
+};
+
 // Descargar Doc
 export const descargarDocumentoEvento = async (idEvento, nombreEvento) => {
   try {
@@ -111,5 +106,4 @@ export const descargarDocumentoEvento = async (idEvento, nombreEvento) => {
     console.error("Error descarga:", error);
     alert("No se pudo descargar el documento.");
   }
->>>>>>> main
 };

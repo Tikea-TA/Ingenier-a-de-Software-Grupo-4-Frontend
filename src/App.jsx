@@ -11,7 +11,6 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
 import { EditarPromocion } from "./pages/Promociones/EditarPromocion";
 import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
-<<<<<<< HEAD
 import { EventosDisponibles } from "./pages/Ventas/EventosDisponibles";
 import { SeleccionAsientos } from "./pages/Ventas/SeleccionAsientos";
 import { ResumenCompra } from "./pages/Ventas/ResumenCompra";
@@ -21,11 +20,9 @@ import { MisEntradas } from "./pages/Ventas/MisEntradas";
 import { DetalleEntrada } from "./pages/Ventas/DetalleEntrada";
 import { DetalleEvento } from "./pages/Eventos/DetalleEventoProd";
 import { TestProductorEvents } from "./pages/EventosXProductor/TestProductorEvents";
-=======
 import { ValidarLocales } from "./pages/Admin/ValidarLocales";
 import { ValidarProductores } from "./pages/Admin/ValidarProductores";
 import { ValidarEventos } from "./pages/Admin/ValidarEventos";
->>>>>>> main
 
 function App() {
   return (
@@ -35,14 +32,14 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          
+
           {/* Rutas de venta de entradas (públicas) */}
           <Route path="/eventos" element={<EventosDisponibles />} />
           <Route path="/comprar-entradas/:eventId" element={<SeleccionAsientos />} />
           <Route path="/resumen-compra" element={<ResumenCompra />} />
           <Route path="/pago" element={<PantallaPago />} />
           <Route path="/confirmacion-compra" element={<ConfirmacionCompra />} />
-          
+
           {/* Rutas protegidas */}
           <Route element={<ProtectedRoute />}>
             <Route path="/user/configprofile" element={<ConfigProfile />} />
@@ -50,21 +47,18 @@ function App() {
             <Route path="/mis-entradas" element={<MisEntradas />} />
             <Route path="/detalle-entrada/:numeroCompra" element={<DetalleEntrada />} />
           </Route>
-          
+
           <Route path="/registrarProductor" element={<RegistrarProductor />} />
           <Route path="/registrarLocal" element={<RegistrarLocal />} />
           <Route path="/registrarEvento" element={<RegistrarEvento />} />
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
-<<<<<<< HEAD
           <Route path="/promocion/editar/:id" element={<EditarPromocion />} />
 
           <Route path="/test-productor-20" element={<TestProductorEvents />} />
           <Route path="/eventos/detalle/:id" element={<DetalleEvento />} />
-=======
           <Route path="/admin/validar-locales" element={<ValidarLocales />} />
           <Route path="/admin/validar-productores" element={<ValidarProductores />} />
           <Route path="/admin/validar-eventos" element={<ValidarEventos />} />
->>>>>>> main
         </Route>
       </Routes>
     </>
