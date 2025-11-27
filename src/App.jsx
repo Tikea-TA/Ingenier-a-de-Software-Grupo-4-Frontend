@@ -17,6 +17,8 @@ import { PantallaPago } from "./pages/Ventas/PantallaPago";
 import { ConfirmacionCompra } from "./pages/Ventas/ConfirmacionCompra";
 import { MisEntradas } from "./pages/Ventas/MisEntradas";
 import { DetalleEntrada } from "./pages/Ventas/DetalleEntrada";
+import { DetalleEvento } from "./pages/Eventos/DetalleEventoProd";
+import { TestProductorEvents } from "./pages/EventosXProductor/TestProductorEvents";
 
 function App() {
   return (
@@ -46,6 +48,9 @@ function App() {
           <Route path="/registrarLocal" element={<RegistrarLocal />} />
           <Route path="/registrarEvento" element={<RegistrarEvento />} />
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
+
+          <Route path="/test-productor-20" element={<TestProductorEvents />} />
+          <Route path="/eventos/detalle/:id" element={<DetalleEvento />} />
         </Route>
       </Routes>
     </>
