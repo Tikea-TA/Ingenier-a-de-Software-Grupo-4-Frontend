@@ -12,6 +12,7 @@ import { RegistrarPromocion } from "./pages/Promociones/RegistrarPromocion";
 import { RegistrarEvento } from "./pages/Eventos/RegistrarEvento";
 import { ValidarLocales } from "./pages/Admin/ValidarLocales";
 import { ValidarProductores } from "./pages/Admin/ValidarProductores";
+import { ValidarEventos } from "./pages/Admin/ValidarEventos";
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
           <Route path="/admin/validar-locales" element={<ValidarLocales />} />
           <Route path="/admin/validar-productores" element={<ValidarProductores />} />
+          <Route path="/admin/validar-eventos" element={<ValidarEventos />} />
         </Route>
       </Routes>
     </>

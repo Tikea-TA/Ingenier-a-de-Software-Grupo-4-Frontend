@@ -46,14 +46,23 @@ export default function Navbar() {
               Colabora con nosotros
             </Link>
 
-            {/* ENLACE CONDICIONAL: Administración Locales */}
+            {/* ENLACE CONDICIONAL: Administración */}
             {showAdminLocales && (
-              <Link
-                to="/admin/validar-locales"
-                className="text-sm transition hover:text-primary"
-              >
-                Administración locales
-              </Link>
+              <>
+                <Link
+                  to="/admin/validar-locales"
+                  className="text-sm transition hover:text-primary"
+                >
+                  Administración locales
+                </Link>
+                
+                <Link 
+                  to="/admin/validar-eventos" 
+                  className="text-sm transition hover:text-primary"
+                >
+                  Validar Eventos
+                </Link>
+              </>
             )}
           </nav>
         </div>
