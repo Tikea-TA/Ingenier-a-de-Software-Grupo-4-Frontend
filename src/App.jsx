@@ -18,7 +18,8 @@ import { PantallaPago } from "./pages/Ventas/PantallaPago";
 import { ConfirmacionCompra } from "./pages/Ventas/ConfirmacionCompra";
 import { MisEntradas } from "./pages/Ventas/MisEntradas";
 import { DetalleEntrada } from "./pages/Ventas/DetalleEntrada";
-import { DetalleEvento } from "./pages/Eventos/DetalleEventoProd";
+import { DetalleEvento as DetalleEventoProd } from "./pages/Eventos/DetalleEventoProd";
+import { DetalleEventoCli } from "./pages/Eventos/DetalleEventoCli";
 import { TestProductorEvents } from "./pages/EventosXProductor/TestProductorEvents";
 import { ValidarLocales } from "./pages/Admin/ValidarLocales";
 import { ValidarProductores } from "./pages/Admin/ValidarProductores";
@@ -56,7 +57,6 @@ function App() {
           <Route path="/promocion/editar/:id" element={<EditarPromocion />} />
 
           <Route path="/test-productor-6" element={<TestProductorEvents />} />
-          <Route path="/eventos/detalle/:id" element={<DetalleEvento />} />
 
           {/* RUTAS DE ADMINISTRACIÓN (Solo Gestores de Eventos/Admin) */}
           {/* Aquí aplicamos la nueva seguridad */}
@@ -65,6 +65,8 @@ function App() {
              <Route path="/admin/validar-productores" element={<ValidarProductores />} />
              <Route path="/admin/validar-eventos" element={<ValidarEventos />} />
           </Route>
+          <Route path="/eventos/detalle/:id" element={<DetalleEventoCli />} />
+          <Route path="/productor/eventos/detalle/:id" element={<DetalleEventoProd />} />
         </Route>
       </Routes>
     </>
