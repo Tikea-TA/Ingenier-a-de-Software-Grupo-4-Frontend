@@ -137,7 +137,7 @@ export const ConfigProfile = () => {
                       name="readonlyName"
                       label="Nombres"
                       value={user?.nombre || ""}
-                      onChange={() => {}}
+                      onChange={() => { }}
                       // evitamos edición hasta que el DTO lo soporte
                       required={false}
                     />
@@ -146,7 +146,7 @@ export const ConfigProfile = () => {
                       name="readonlyLastname"
                       label="Apellidos"
                       value={user?.apellidos || ""}
-                      onChange={() => {}}
+                      onChange={() => { }}
                       required={false}
                     />
                   </div>

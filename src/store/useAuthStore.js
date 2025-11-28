@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-const STORAGE_KEY = "cliente";
+const STORAGE_KEY = "tikea_session";
 
 export const useAuthStore = create((set) => ({
   user: (() => {
@@ -21,9 +21,10 @@ export const useAuthStore = create((set) => ({
   })(),
 
   // Guardar usuario al iniciar sesión
-  login: (cliente) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cliente));
-    set({ user: cliente, isAuthenticated: true });
+  login: (userData, tipoUsuario) => {
+    const sessionData = { ...userData, tipoUsuario};
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    set({ user: sessionData, isAuthenticated: true });
   },
 
   // Cerrar sesión

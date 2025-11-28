@@ -9,20 +9,19 @@ import {
   Dialog,
 } from "@radix-ui/themes";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useMemo, useCallback } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 
-import {
-  ListaLocales,
-  TiposEvento,
-} from "../../lib/mock";
+import { ListaLocales, TiposEvento } from "../../lib/mock";
 
 import StadiumZoneMapSelector from "../../components/StadiumZoneMapSelector";
 import TheaterZoneMapSelector from "../../components/TheaterZoneMapSelector";
 import SeatMapSelector from "../../components/SeatMapSelector";
 
-// ---- util: archivo -> base64 ----
+import { useAuthStore } from "../../store/useAuthStore";
+import { registrarEvento } from "../../api/eventoService";
+
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -34,22 +33,21 @@ const fileToBase64 = (file) =>
     reader.onerror = (error) => reject(error);
   });
 
-// ---- helper: arma estado inicial de zonas desde configuracionLocal.zonas ----
 function buildInitialZoneStateFromMock(configuracionLocal) {
   if (!configuracionLocal || !configuracionLocal.zonas) return undefined;
 
   const { zonas } = configuracionLocal;
   const map = {};
 
-  // zonas es un objeto: { zona_a: { estado, ...}, tribuna_oeste: {...}, ... }
   Object.entries(zonas).forEach(([zonaId, zonaCfg]) => {
-    // En el mock ya usas "available" / "blocked" / "selected" como estado,
-    // pero por si acaso mapeamos fallback:
     let estado = zonaCfg.estado;
+
     if (!estado) {
-      if (zonaCfg.habilitada === false) estado = "blocked";
-      else estado = "available";
+      estado = zonaCfg.habilitada === false ? "blocked" : "available";
     }
+
+    if (estado === "selected") estado = "available";
+
     map[zonaId] = estado;
   });
 
@@ -57,10 +55,11 @@ function buildInitialZoneStateFromMock(configuracionLocal) {
 }
 
 export const RegistrarEvento = () => {
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [errors, setErrors] = useState({});
   const [successOpen, setSuccessOpen] = useState(false);
 
-  // -------- campos básicos --------
   const [nombreEvento, setNombreEvento] = useState("");
   const [fechaHora, setFechaHora] = useState("");
   const [localSeleccionado, setLocalSeleccionado] = useState("");
@@ -68,43 +67,47 @@ export const RegistrarEvento = () => {
   const [capacidadMaximaLocal, setCapacidadMaximaLocal] = useState(null);
   const [capacidadMaximaEvento, setCapacidadMaximaEvento] = useState("");
 
-  // config del local seleccionado (desde mock)
   const [configLocalSeleccionado, setConfigLocalSeleccionado] = useState(null);
   const [tipoLocalSeleccionado, setTipoLocalSeleccionado] = useState("");
 
-  // -------- tipos de entrada --------
+  const [seatMapZonaId, setSeatMapZonaId] = useState(null);
+  const [seatMapZonaConfig, setSeatMapZonaConfig] = useState(null);
+
   const [tiposEntrada, setTiposEntrada] = useState([
     {
       id: 1,
       nombre: "",
-      tipo: "", // por ejemplo: "GENERAL", "VIP", etc.
+      tipo: "",
       precio: "",
-      tipoComision: "FIJO", // "FIJO" | "PORCENTAJE"
+      tipoComision: "FIJO",
       valorComision: "",
+      asientosPorZona: {},
+      cantidadesPorZona: {},
     },
   ]);
 
-  // -------- archivos --------
+  const [tipoEntradaSeleccionadaId, setTipoEntradaSeleccionadaId] = useState(1);
+
   const [bannerBase64, setBannerBase64] = useState("");
   const [bannerName, setBannerName] = useState("");
   const [docBase64, setDocBase64] = useState("");
   const [docName, setDocName] = useState("");
 
-  // -------- handlers de archivo --------
-  const handleBannerChange = async (files) => {
-    const file = files?.[0];
+  const handleChangeTipoEvento = (value) => setTipoEventoSeleccionado(value);
+
+  const handleBannerChange = async (fileOrFiles) => {
+    const file = Array.isArray(fileOrFiles) ? fileOrFiles[0] : fileOrFiles;
     if (!file) {
-      setBannerBase64("");
       setBannerName("");
+      setBannerBase64("");
       return;
     }
-    setBannerName(file.name);
+
     try {
+      setBannerName(file.name);
       const base64 = await fileToBase64(file);
       setBannerBase64(base64);
-      if (errors.banner) {
-        setErrors((prev) => ({ ...prev, banner: undefined }));
-      }
+      setErrors((prev) => ({ ...prev, banner: undefined }));
     } catch (err) {
       console.error("Error banner -> base64", err);
       setErrors((prev) => ({
@@ -114,20 +117,19 @@ export const RegistrarEvento = () => {
     }
   };
 
-  const handleDocChange = async (files) => {
-    const file = files?.[0];
+  const handleDocChange = async (fileOrFiles) => {
+    const file = Array.isArray(fileOrFiles) ? fileOrFiles[0] : fileOrFiles;
     if (!file) {
-      setDocBase64("");
       setDocName("");
+      setDocBase64("");
       return;
     }
-    setDocName(file.name);
+
     try {
+      setDocName(file.name);
       const base64 = await fileToBase64(file);
       setDocBase64(base64);
-      if (errors.documentacion) {
-        setErrors((prev) => ({ ...prev, documentacion: undefined }));
-      }
+      setErrors((prev) => ({ ...prev, documentacion: undefined }));
     } catch (err) {
       console.error("Error doc -> base64", err);
       setErrors((prev) => ({
@@ -137,7 +139,6 @@ export const RegistrarEvento = () => {
     }
   };
 
-  // -------- cambio de local --------
   const handleChangeLocal = (value) => {
     setLocalSeleccionado(value);
 
@@ -155,136 +156,337 @@ export const RegistrarEvento = () => {
       setTipoLocalSeleccionado("");
     }
 
-    // al cambiar de local, podrías resetear tipos de entrada si quieres
-    // setTiposEntrada([...]);
-  };
+    setSeatMapZonaId(null);
+    setSeatMapZonaConfig(null);
 
-  // -------- cambio de tipo de evento --------
-  const handleChangeTipoEvento = (value) => {
-    setTipoEventoSeleccionado(value);
-  };
-
-  // -------- tipos de entrada (add/update/remove) --------
-  const handleChangeTipoEntradaCampo = (id, campo, valor) => {
     setTiposEntrada((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              [campo]: valor,
-            }
-          : t
-      )
+      prev.map((t) => ({
+        ...t,
+        asientosPorZona: {},
+        cantidadesPorZona: {},
+      }))
     );
   };
 
   const handleAddTipoEntrada = () => {
-    setTiposEntrada((prev) => [
-      ...prev,
-      {
-        id: prev.length ? prev[prev.length - 1].id + 1 : 1,
-        nombre: "",
-        tipo: "",
-        precio: "",
-        tipoComision: "FIJO",
-        valorComision: "",
-      },
-    ]);
+    setTiposEntrada((prev) => {
+      const newId = prev.length ? prev[prev.length - 1].id + 1 : 1;
+      const next = [
+        ...prev,
+        {
+          id: newId,
+          nombre: "",
+          tipo: "",
+          precio: "",
+          tipoComision: "FIJO",
+          valorComision: "",
+          asientosPorZona: {},
+          cantidadesPorZona: {},
+        },
+      ];
+      setTipoEntradaSeleccionadaId(newId);
+      return next;
+    });
   };
 
   const handleRemoveTipoEntrada = (id) => {
-    setTiposEntrada((prev) => prev.filter((t) => t.id !== id));
+    setTiposEntrada((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      if (tipoEntradaSeleccionadaId === id) {
+        setTipoEntradaSeleccionadaId(next[0]?.id ?? null);
+      }
+      return next;
+    });
   };
 
-  // -------- submit --------
-  const handleSubmit = (e) => {
+  const handleChangeTipoEntradaCampo = (id, campo, valor) => {
+    setTiposEntrada((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, [campo]: valor } : t))
+    );
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     const newErrors = {};
+    if (!nombreEvento.trim()) newErrors.nombreEvento = "Campo requerido.";
+    if (!fechaHora) newErrors.fechaHora = "Campo requerido.";
+    if (!localSeleccionado) newErrors.localSeleccionado = "Campo requerido.";
+    if (!tipoEventoSeleccionado) newErrors.tipoEvento = "Campo requerido.";
+    if (!capacidadMaximaEvento) newErrors.capacidadEvento = "Campo requerido.";
+    if (!bannerBase64) newErrors.banner = "Campo requerido.";
+    if (!docBase64) newErrors.documentacion = "Campo requerido.";
 
-    if (!nombreEvento.trim())
-      newErrors.nombreEvento = "El nombre del espectáculo es obligatorio.";
-    if (!fechaHora)
-      newErrors.fechaHora = "La fecha y hora son obligatorias.";
-    if (!localSeleccionado)
-      newErrors.local = "Debes seleccionar un local.";
-    if (!tipoEventoSeleccionado)
-      newErrors.tipoEvento = "Debes seleccionar un tipo de evento.";
-
-    if (!capacidadMaximaEvento) {
-      newErrors.capacidadEvento = "La capacidad máxima del evento es obligatoria.";
-    } else if (Number.isNaN(Number(capacidadMaximaEvento))) {
-      newErrors.capacidadEvento = "La capacidad máxima debe ser numérica.";
-    } else if (
-      capacidadMaximaLocal &&
-      Number(capacidadMaximaEvento) > Number(capacidadMaximaLocal)
-    ) {
-      newErrors.capacidadEvento =
-        "La capacidad del evento no puede superar la capacidad del local.";
-    }
-
-    if (!bannerBase64) {
-      newErrors.banner = "Debes cargar un banner para el evento.";
-    }
-    if (!docBase64) {
-      newErrors.documentacion = "Debes adjuntar la documentación requerida.";
-    }
-
-    if (!tiposEntrada.length) {
-      newErrors.tiposEntrada = "Debes configurar al menos un tipo de entrada.";
-    } else {
-      const algunInvalido = tiposEntrada.some((t) => {
-        if (!t.nombre.trim()) return true;
-        if (!t.precio || Number.isNaN(Number(t.precio))) return true;
-        if (!t.valorComision || Number.isNaN(Number(t.valorComision)))
-          return true;
-        return false;
-      });
-      if (algunInvalido) {
-        newErrors.tiposEntrada =
-          "Todos los tipos de entrada deben tener nombre, precio y comisión válidos.";
-      }
+    const tiposValidos = tiposEntrada.every(
+      (t) =>
+        t.nombre.trim() &&
+        String(t.precio).trim() &&
+        String(t.valorComision).trim()
+    );
+    if (!tiposValidos) {
+      newErrors.tiposEntrada =
+        "Completa nombre, precio y comisión en todos los tipos.";
     }
 
     setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
+    if (Object.keys(newErrors).length > 0) return;
+
+    const capacidadEventoNum = Number(capacidadMaximaEvento);
+    if (!Number.isFinite(capacidadEventoNum) || capacidadEventoNum <= 0) {
+      setErrors((prev) => ({
+        ...prev,
+        capacidadEvento: "Ingresa una capacidad válida.",
+      }));
       return;
     }
 
-    // payload demo
+    if (capacidadMaximaLocal != null) {
+      const capacidadLocalNum = Number(capacidadMaximaLocal);
+      if (
+        Number.isFinite(capacidadLocalNum) &&
+        capacidadEventoNum > capacidadLocalNum
+      ) {
+        setErrors((prev) => ({
+          ...prev,
+          capacidadEvento: `La capacidad del evento (${capacidadEventoNum}) supera la capacidad máxima del local (${capacidadLocalNum}). Ajusta el aforo del evento.`,
+        }));
+        return;
+      }
+    }
+
+    let totalAsignado = 0;
+
+    tiposEntrada.forEach((t) => {
+      if (t.asientosPorZona) {
+        Object.values(t.asientosPorZona).forEach((arr) => {
+          if (Array.isArray(arr)) {
+            totalAsignado += arr.length;
+          }
+        });
+      }
+      if (t.cantidadesPorZona) {
+        Object.values(t.cantidadesPorZona).forEach((val) => {
+          const n = parseInt(val, 10);
+          if (Number.isFinite(n) && n > 0) {
+            totalAsignado += n;
+          }
+        });
+      }
+    });
+
+    if (totalAsignado > capacidadEventoNum) {
+      setErrors((prev) => ({
+        ...prev,
+        aforoAsignado: `La cantidad total de asientos asignados (${totalAsignado}) supera la capacidad máxima del evento (${capacidadEventoNum}). Ajusta la asignación para continuar.`,
+      }));
+      return;
+    }
+
+    if (totalAsignado < capacidadEventoNum) {
+      const continuar = window.confirm(
+        `Has asignado ${totalAsignado} asientos de una capacidad máxima de ${capacidadEventoNum}. ¿Deseas continuar sin completar el aforo?`
+      );
+      if (!continuar) {
+        return;
+      }
+    }
+    // Separar fecha y hora
+    const dateObj = new Date(fechaHora);
+    const fecha = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
+    const horaInicio = dateObj.toTimeString().split(" ")[0]; // HH:MM:SS
+
+    // Calcular hora fin estimada (2 horas después)
+    const dateFin = new Date(dateObj.getTime() + 2 * 60 * 60 * 1000);
+    const horaFin = dateFin.toTimeString().split(" ")[0];
+
+    // Mapeo de IDs a Enums del Backend
+    const CATEGORY_MAPPING = {
+      "158": "CONCIERTO",
+      "585": "TEATRO",
+    };
+
     const payload = {
+      idEstablecimiento: Number(localSeleccionado),
+      idProductor: user?.idProductor,
+      idGestor: 1, // Valor por defecto o mock
       nombreEvento: nombreEvento.trim(),
-      fechaHora,
-      idLocal: localSeleccionado,
-      tipoEvento: tipoEventoSeleccionado,
-      capacidadMaximaEvento: Number(capacidadMaximaEvento),
+      categoria: CATEGORY_MAPPING[tipoEventoSeleccionado],
+      fecha: fecha,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
+      estado: "PENDIENTE_VALIDACION",
+      aforoTotal: capacidadEventoNum,
+      documentacionAdjunta: docBase64,
+      banner: bannerBase64,
+
+      // Campos adicionales que el frontend maneja pero el backend
+      // tal vez ignore o necesite en otro endpoint:
       tiposEntrada: tiposEntrada.map((t) => ({
         nombre: t.nombre.trim(),
         tipo: t.tipo,
         precio: Number(t.precio),
         tipoComision: t.tipoComision,
         valorComision: Number(t.valorComision),
+        asientosPorZona: t.asientosPorZona || {},
+        cantidadesPorZona: t.cantidadesPorZona || {},
       })),
-      bannerBase64,
-      documentacionBase64: docBase64,
-      // Podrías también incluir lo que devuelvan los mapas (zonas/selecciones)
+      seatMapZonaId,
     };
 
     console.log("Payload evento:", payload);
+    await registrarEvento(payload);
     setSuccessOpen(true);
   };
 
-  // -------- configuración inicial del mapa desde el mock --------
-  const initialZoneState =
-    configLocalSeleccionado
-      ? buildInitialZoneStateFromMock(configLocalSeleccionado)
-      : undefined;
+  const initialZoneState = useMemo(() => {
+    if (!configLocalSeleccionado) return undefined;
+    return buildInitialZoneStateFromMock(configLocalSeleccionado);
+  }, [configLocalSeleccionado]);
 
-  const auditoriumSeatMap =
-    tipoLocalSeleccionado === "AUDITORIO" &&
-    configLocalSeleccionado &&
-    configLocalSeleccionado.mapaAsientos
-      ? configLocalSeleccionado.mapaAsientos
-      : null;
+  const auditoriumSeatMap = useMemo(() => {
+    if (
+      tipoLocalSeleccionado === "AUDITORIO" &&
+      configLocalSeleccionado?.mapaAsientos
+    ) {
+      return configLocalSeleccionado.mapaAsientos;
+    }
+    return null;
+  }, [tipoLocalSeleccionado, configLocalSeleccionado]);
+
+  const handleZoneSelectionChange = useCallback(
+    ({ selected }) => {
+      const zonaId = selected?.[0];
+
+      if (!zonaId || !configLocalSeleccionado?.zonas) {
+        setSeatMapZonaId(null);
+        setSeatMapZonaConfig(null);
+        return;
+      }
+
+      const zonaCfg = configLocalSeleccionado.zonas[zonaId];
+
+      setSeatMapZonaId(zonaId);
+
+      if (zonaCfg?.tieneDistribucionAsientos && zonaCfg?.mapaAsientos) {
+        const { filas, columnas, asientosBloqueados = [] } =
+          zonaCfg.mapaAsientos;
+
+        const baseBlocked = asientosBloqueados.map((a) => [a.fila, a.columna]);
+
+        setSeatMapZonaConfig({
+          rows: filas,
+          cols: columnas,
+          baseBlocked,
+        });
+      } else {
+        setSeatMapZonaConfig(null);
+      }
+    },
+    [configLocalSeleccionado]
+  );
+
+  const currentSeatSelection = useMemo(() => {
+    if (!seatMapZonaId) return [];
+    const tipo = tiposEntrada.find((t) => t.id === tipoEntradaSeleccionadaId);
+    if (!tipo || !tipo.asientosPorZona) return [];
+    return tipo.asientosPorZona[seatMapZonaId] || [];
+  }, [tiposEntrada, tipoEntradaSeleccionadaId, seatMapZonaId]);
+
+  const handleSeatSelectionChange = useCallback(
+    (sel) => {
+      if (!seatMapZonaId || !tipoEntradaSeleccionadaId) return;
+      setTiposEntrada((prev) =>
+        prev.map((t) => {
+          if (t.id !== tipoEntradaSeleccionadaId) return t;
+          const prevMap = t.asientosPorZona || {};
+          return {
+            ...t,
+            asientosPorZona: {
+              ...prevMap,
+              [seatMapZonaId]: sel,
+            },
+          };
+        })
+      );
+    },
+    [seatMapZonaId, tipoEntradaSeleccionadaId]
+  );
+
+  const dynamicBlocked = useMemo(() => {
+    if (!seatMapZonaConfig || !seatMapZonaId) return [];
+
+    const base = seatMapZonaConfig.baseBlocked || [];
+    const currentKeys = new Set(
+      currentSeatSelection.map(([r, c]) => `${r}-${c}`)
+    );
+
+    const seen = new Set();
+    const result = [];
+
+    const addSeat = ([r, c]) => {
+      const k = `${r}-${c}`;
+      if (seen.has(k)) return;
+      seen.add(k);
+      result.push([r, c]);
+    };
+
+    base.forEach(addSeat);
+
+    tiposEntrada.forEach((t) => {
+      if (t.id === tipoEntradaSeleccionadaId) return;
+      const arr = t.asientosPorZona?.[seatMapZonaId] || [];
+      arr.forEach(([r, c]) => {
+        const k = `${r}-${c}`;
+        if (currentKeys.has(k)) return;
+        addSeat([r, c]);
+      });
+    });
+
+    return result;
+  }, [
+    seatMapZonaConfig,
+    seatMapZonaId,
+    tiposEntrada,
+    tipoEntradaSeleccionadaId,
+    currentSeatSelection,
+  ]);
+
+  const currentQuantityForZone = useMemo(() => {
+    if (!seatMapZonaId) return "";
+    const tipo = tiposEntrada.find((t) => t.id === tipoEntradaSeleccionadaId);
+    if (!tipo || !tipo.cantidadesPorZona) return "";
+    const v = tipo.cantidadesPorZona[seatMapZonaId];
+    return v != null ? String(v) : "";
+  }, [tiposEntrada, tipoEntradaSeleccionadaId, seatMapZonaId]);
+
+  const handleCantidadZonaChange = useCallback(
+    (value) => {
+      if (!seatMapZonaId || !tipoEntradaSeleccionadaId) return;
+      const onlyDigits = value.replace(/\D/g, "");
+      setTiposEntrada((prev) =>
+        prev.map((t) => {
+          if (t.id !== tipoEntradaSeleccionadaId) return t;
+          const prevMap = t.cantidadesPorZona || {};
+          return {
+            ...t,
+            cantidadesPorZona: {
+              ...prevMap,
+              [seatMapZonaId]: onlyDigits,
+            },
+          };
+        })
+      );
+    },
+    [seatMapZonaId, tipoEntradaSeleccionadaId]
+  );
+
+  const currentZonaNombre = useMemo(() => {
+    if (!seatMapZonaId || !configLocalSeleccionado?.zonas) {
+      return seatMapZonaId || "";
+    }
+    const zonaCfg = configLocalSeleccionado.zonas[seatMapZonaId];
+    return zonaCfg?.nombreZona || seatMapZonaId;
+  }, [seatMapZonaId, configLocalSeleccionado]);
 
   return (
     <main className="min-h-screen bg-background-dark text-text">
@@ -302,18 +504,12 @@ export const RegistrarEvento = () => {
 
               <Separator my="2" size="4" />
 
-              {/* -------- Datos generales del evento -------- */}
               <div className="space-y-3">
                 <Heading size="3">Datos del espectáculo</Heading>
                 <div className="grid gap-4 md:grid-cols-2">
-                  {/* Nombre del espectáculo */}
                   <div className="space-y-1">
-                    <label
-                      htmlFor="nombreEvento"
-                      className="text-sm font-medium"
-                    >
-                      Nombre del espectáculo{" "}
-                      <span className="text-red-500">*</span>
+                    <label htmlFor="nombreEvento" className="text-sm font-medium">
+                      Nombre del espectáculo <span className="text-red-500">*</span>
                     </label>
                     <TextField.Root
                       id="nombreEvento"
@@ -324,18 +520,12 @@ export const RegistrarEvento = () => {
                       size="3"
                     />
                     {errors.nombreEvento && (
-                      <p className="text-sm text-red-400">
-                        {errors.nombreEvento}
-                      </p>
+                      <p className="text-sm text-red-400">{errors.nombreEvento}</p>
                     )}
                   </div>
 
-                  {/* Fecha y hora */}
                   <div className="space-y-1">
-                    <label
-                      htmlFor="fechaHora"
-                      className="text-sm font-medium"
-                    >
+                    <label htmlFor="fechaHora" className="text-sm font-medium">
                       Fecha y hora <span className="text-red-500">*</span>
                     </label>
                     <TextField.Root
@@ -348,18 +538,12 @@ export const RegistrarEvento = () => {
                       size="3"
                     />
                     {errors.fechaHora && (
-                      <p className="text-sm text-red-400">
-                        {errors.fechaHora}
-                      </p>
+                      <p className="text-sm text-red-400">{errors.fechaHora}</p>
                     )}
                   </div>
 
-                  {/* Selección del local */}
                   <div className="space-y-1">
-                    <label
-                      htmlFor="local"
-                      className="block text-sm font-medium"
-                    >
+                    <label htmlFor="local" className="block text-sm font-medium">
                       Local <span className="text-red-500">*</span>
                     </label>
                     <Select.Root
@@ -378,37 +562,37 @@ export const RegistrarEvento = () => {
                         sideOffset={4}
                         className="w-(--radix-select-trigger-width)"
                       >
-                        {ListaLocales.map((local) => (
+                        {ListaLocales.map((loc) => (
                           <Select.Item
-                            key={local.idLocal}
-                            value={String(local.idLocal)}
+                            key={loc.idLocal}
+                            value={String(loc.idLocal)}
                           >
-                            {local.nombreEstablecimiento}
+                            {loc.nombreEstablecimiento}
                           </Select.Item>
                         ))}
                       </Select.Content>
                     </Select.Root>
-                    {capacidadMaximaLocal !== null && (
-                      <Text size="1" color="var(--color-text)">
-                        Capacidad máxima del local:{" "}
-                        <strong>{capacidadMaximaLocal}</strong> personas
-                      </Text>
-                    )}
-                    {errors.local && (
+                    {errors.localSeleccionado && (
                       <p className="text-sm text-red-400">
-                        {errors.local}
+                        {errors.localSeleccionado}
                       </p>
                     )}
                   </div>
 
-                  {/* Capacidad máxima del evento */}
                   <div className="space-y-1">
-                    <label
-                      htmlFor="capacidadEvento"
-                      className="text-sm font-medium"
-                    >
-                      Capacidad máxima del evento{" "}
-                      <span className="text-red-500">*</span>
+                    <label className="text-sm font-medium">
+                      Capacidad máxima del local
+                    </label>
+                    <TextField.Root
+                      value={capacidadMaximaLocal ?? ""}
+                      readOnly
+                      size="3"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label htmlFor="capacidadEvento" className="text-sm font-medium">
+                      Capacidad del evento <span className="text-red-500">*</span>
                     </label>
                     <TextField.Root
                       id="capacidadEvento"
@@ -417,9 +601,7 @@ export const RegistrarEvento = () => {
                       pattern="[0-9]{1,12}"
                       maxLength={12}
                       value={capacidadMaximaEvento}
-                      onChange={(e) =>
-                        setCapacidadMaximaEvento(e.target.value)
-                      }
+                      onChange={(e) => setCapacidadMaximaEvento(e.target.value)}
                       required
                       size="3"
                     />
@@ -428,14 +610,15 @@ export const RegistrarEvento = () => {
                         {errors.capacidadEvento}
                       </p>
                     )}
+                    {errors.aforoAsignado && (
+                      <p className="text-sm text-red-400">
+                        {errors.aforoAsignado}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Tipo de evento */}
                   <div className="space-y-1">
-                    <label
-                      htmlFor="tipoEvento"
-                      className="block text-sm font-medium"
-                    >
+                    <label htmlFor="tipoEvento" className="block text-sm font-medium">
                       Tipo de evento <span className="text-red-500">*</span>
                     </label>
                     <Select.Root
@@ -455,165 +638,173 @@ export const RegistrarEvento = () => {
                         className="w-(--radix-select-trigger-width)"
                       >
                         {TiposEvento.map((tipo) => (
-                          <Select.Item
-                            key={tipo.value}
-                            value={String(tipo.value)}
-                          >
+                          <Select.Item key={tipo.value} value={String(tipo.value)}>
                             {tipo.label}
                           </Select.Item>
                         ))}
                       </Select.Content>
                     </Select.Root>
                     {errors.tipoEvento && (
-                      <p className="text-sm text-red-400">
-                        {errors.tipoEvento}
-                      </p>
+                      <p className="text-sm text-red-400">{errors.tipoEvento}</p>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* -------- Configuración de tipos de entrada -------- */}
               <Separator my="2" size="4" />
               <div className="space-y-3">
                 <Heading size="3">Tipos de entradas</Heading>
                 <Text size="2" color="var(--color-text)">
                   Configura los tipos de entradas, precios y comisión por
-                  entrada.
+                  entrada. Selecciona una para editarla y asignar asientos o
+                  cantidades por zona.
                 </Text>
 
                 <div className="space-y-3">
-                  {tiposEntrada.map((t) => (
-                    <div
-                      key={t.id}
-                      className="rounded-xl border border-zinc-800/70 p-4 space-y-3"
-                    >
-                      <div className="flex justify-between items-center">
-                        <Text size="2" className="font-medium">
-                          Entrada #{t.id}
-                        </Text>
-                        {tiposEntrada.length > 1 && (
-                          <button
-                            type="button"
-                            className="text-sm text-red-400 hover:underline"
-                            onClick={() => handleRemoveTipoEntrada(t.id)}
-                          >
-                            Eliminar
-                          </button>
-                        )}
-                      </div>
+                  {tiposEntrada.map((t) => {
+                    const selected = t.id === tipoEntradaSeleccionadaId;
 
-                      <div className="grid gap-3 md:grid-cols-4">
-                        {/* Nombre */}
-                        <div className="space-y-1 md:col-span-2">
-                          <label className="text-sm font-medium">
-                            Nombre de la entrada
-                          </label>
-                          <TextField.Root
-                            value={t.nombre}
-                            onChange={(e) =>
-                              handleChangeTipoEntradaCampo(
-                                t.id,
-                                "nombre",
-                                e.target.value
-                              )
-                            }
-                            size="3"
-                          />
+                    return (
+                      <div
+                        key={t.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setTipoEntradaSeleccionadaId(t.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setTipoEntradaSeleccionadaId(t.id);
+                          }
+                        }}
+                        className={[
+                          "rounded-xl border p-4 space-y-3 cursor-pointer transition",
+                          selected
+                            ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500/40"
+                            : "border-zinc-800/70 hover:border-zinc-700",
+                        ].join(" ")}
+                        aria-pressed={selected}
+                      >
+                        <div className="flex justify-between items-center">
+                          <Text size="2" className="font-medium">
+                            Entrada #{t.id}
+                          </Text>
+
+                          <div className="flex items-center gap-3">
+                            {selected && (
+                              <span className="text-xs text-indigo-300">
+                                Seleccionada
+                              </span>
+                            )}
+
+                            {tiposEntrada.length > 1 && (
+                              <button
+                                type="button"
+                                className="text-sm text-red-400 hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveTipoEntrada(t.id);
+                                }}
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Tipo (opcional / libre) */}
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium">
-                            Tipo (ej. General, VIP)
-                          </label>
-                          <TextField.Root
-                            value={t.tipo}
-                            onChange={(e) =>
-                              handleChangeTipoEntradaCampo(
-                                t.id,
-                                "tipo",
-                                e.target.value
-                              )
-                            }
-                            size="3"
-                          />
-                        </div>
-
-                        {/* Precio */}
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium">
-                            Precio (S/)
-                          </label>
-                          <TextField.Root
-                            inputMode="numeric"
-                            value={t.precio}
-                            onChange={(e) =>
-                              handleChangeTipoEntradaCampo(
-                                t.id,
-                                "precio",
-                                e.target.value
-                              )
-                            }
-                            size="3"
-                          />
-                        </div>
-
-                        {/* Tipo de comisión */}
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium">
-                            Tipo de comisión
-                          </label>
-                          <Select.Root
-                            value={t.tipoComision}
-                            onValueChange={(val) =>
-                              handleChangeTipoEntradaCampo(
-                                t.id,
-                                "tipoComision",
-                                val
-                              )
-                            }
-                          >
-                            <Select.Trigger
+                        <div className="grid gap-3 md:grid-cols-4">
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium">
+                              Nombre de la entrada
+                            </label>
+                            <TextField.Root
+                              value={t.nombre}
+                              onChange={(e) =>
+                                handleChangeTipoEntradaCampo(
+                                  t.id,
+                                  "nombre",
+                                  e.target.value
+                                )
+                              }
                               size="3"
-                              className="w-full"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <Select.Content
-                              position="popper"
-                              sideOffset={4}
-                              className="w-(--radix-select-trigger-width)"
-                            >
-                              <Select.Item value="FIJO">
-                                Precio fijo (S/)
-                              </Select.Item>
-                              <Select.Item value="PORCENTAJE">
-                                Porcentaje (%)
-                              </Select.Item>
-                            </Select.Content>
-                          </Select.Root>
-                        </div>
+                          </div>
 
-                        {/* Valor de comisión */}
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium">
-                            Valor de comisión
-                          </label>
-                          <TextField.Root
-                            inputMode="numeric"
-                            value={t.valorComision}
-                            onChange={(e) =>
-                              handleChangeTipoEntradaCampo(
-                                t.id,
-                                "valorComision",
-                                e.target.value
-                              )
-                            }
-                            size="3"
-                          />
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Precio (S/)
+                            </label>
+                            <TextField.Root
+                              inputMode="numeric"
+                              value={t.precio}
+                              onChange={(e) =>
+                                handleChangeTipoEntradaCampo(
+                                  t.id,
+                                  "precio",
+                                  e.target.value
+                                )
+                              }
+                              size="3"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Tipo de comisión
+                            </label>
+                            <Select.Root
+                              value={t.tipoComision}
+                              onValueChange={(val) =>
+                                handleChangeTipoEntradaCampo(
+                                  t.id,
+                                  "tipoComision",
+                                  val
+                                )
+                              }
+                            >
+                              <Select.Trigger
+                                size="3"
+                                className="w-full"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Select.Content
+                                position="popper"
+                                sideOffset={4}
+                                className="w-[var(--radix-select-trigger-width)]"
+                              >
+                                <Select.Item value="FIJO">
+                                  Precio fijo (S/)
+                                </Select.Item>
+                                <Select.Item value="PORCENTAJE">
+                                  Porcentaje (%)
+                                </Select.Item>
+                              </Select.Content>
+                            </Select.Root>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Valor de comisión
+                            </label>
+                            <TextField.Root
+                              inputMode="numeric"
+                              value={t.valorComision}
+                              onChange={(e) =>
+                                handleChangeTipoEntradaCampo(
+                                  t.id,
+                                  "valorComision",
+                                  e.target.value
+                                )
+                              }
+                              size="3"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <Button
                     type="button"
@@ -631,27 +822,28 @@ export const RegistrarEvento = () => {
                 </div>
               </div>
 
-              {/* -------- Mapa del local (debajo de tipos de entrada) -------- */}
               {localSeleccionado && configLocalSeleccionado && (
                 <>
                   <Separator my="2" size="4" />
                   <div className="space-y-3">
                     <Heading size="3">Mapa del local seleccionado</Heading>
                     <Text size="2" color="var(--color-text)">
-                      Visualiza la distribución del local según su tipo y
-                      configuración guardada.
+                      Selecciona una zona y configura asientos o cantidades
+                      para el tipo de entrada seleccionado.
                     </Text>
 
-                    <div className="rounded-xl border border-zinc-800/70 p-4">
+                    <div className="rounded-xl border border-zinc-800/70 p-4 space-y-4">
                       {tipoLocalSeleccionado === "ESTADIO" && (
                         <StadiumZoneMapSelector
                           initialState={initialZoneState}
+                          onChange={handleZoneSelectionChange}
                         />
                       )}
 
                       {tipoLocalSeleccionado === "TEATRO" && (
                         <TheaterZoneMapSelector
                           initialState={initialZoneState}
+                          onChange={handleZoneSelectionChange}
                         />
                       )}
 
@@ -659,11 +851,13 @@ export const RegistrarEvento = () => {
                         <>
                           {auditoriumSeatMap ? (
                             <SeatMapSelector
-                              initialRows={auditoriumSeatMap.filas}
-                              initialCols={auditoriumSeatMap.columnas}
-                              initialBlocked={
-                                auditoriumSeatMap.asientosBloqueados || []
-                              }
+                              seatConfig={{
+                                rows: auditoriumSeatMap.filas,
+                                cols: auditoriumSeatMap.columnas,
+                                blocked: (
+                                  auditoriumSeatMap.asientosBloqueados || []
+                                ).map((a) => [a.fila, a.columna]),
+                              }}
                             />
                           ) : (
                             <Text size="2" color="var(--color-text)">
@@ -673,24 +867,44 @@ export const RegistrarEvento = () => {
                           )}
                         </>
                       )}
-
-                      {!tipoLocalSeleccionado && (
-                        <Text size="2" color="var(--color-text)">
-                          Selecciona un local para visualizar su mapa.
-                        </Text>
-                      )}
                     </div>
+
+                    {seatMapZonaId && seatMapZonaConfig && (
+                      <ZonaConMapa
+                        seatMapZonaId={seatMapZonaId}
+                        seatMapZonaConfig={seatMapZonaConfig}
+                        currentZonaNombre={currentZonaNombre}
+                        tipoEntradaSeleccionadaId={tipoEntradaSeleccionadaId}
+                        currentSeatSelection={currentSeatSelection}
+                        dynamicBlocked={dynamicBlocked}
+                        onClose={() => {
+                          setSeatMapZonaId(null);
+                          setSeatMapZonaConfig(null);
+                        }}
+                        onSeatChange={handleSeatSelectionChange}
+                      />
+                    )}
+
+                    {seatMapZonaId && !seatMapZonaConfig && (
+                      <ZonaSinMapa
+                        currentZonaNombre={currentZonaNombre}
+                        currentQuantityForZone={currentQuantityForZone}
+                        onCantidadChange={handleCantidadZonaChange}
+                        onClear={() => {
+                          setSeatMapZonaId(null);
+                          setSeatMapZonaConfig(null);
+                        }}
+                      />
+                    )}
                   </div>
                 </>
               )}
 
               <Separator my="2" size="4" />
 
-              {/* -------- Archivos -------- */}
               <div className="space-y-4">
                 <Heading size="3">Archivos del evento</Heading>
 
-                {/* Banner */}
                 <div className="space-y-2">
                   <Text size="2" color="var(--color-text)">
                     Banner del evento (imagen).
@@ -707,7 +921,6 @@ export const RegistrarEvento = () => {
                   />
                 </div>
 
-                {/* Documentación */}
                 <div className="space-y-2">
                   <Text size="2" color="var(--color-text)">
                     Documentación de sustento (contratos, permisos, etc.).
@@ -736,33 +949,103 @@ export const RegistrarEvento = () => {
         </div>
       </section>
 
-      {/* -------- diálogo éxito -------- */}
       <Dialog.Root open={successOpen} onOpenChange={setSuccessOpen}>
-        <Dialog.Content
-          size="3"
-          className="max-w-md"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <Dialog.Title />
-          <Flex direction="column" align="center" gap="3">
-            <CheckCircledIcon
-              width={48}
-              height={48}
-              className="text-green-600"
-            />
-            <Heading size="4">¡Evento registrado!</Heading>
-            <Text size="2" color="var(--color-text)" align="center">
-              Hemos registrado tu evento con la configuración seleccionada.
-            </Text>
-            <Flex gap="3" mt="3">
-              <Button asChild>
-                <Link to="/">Ir al inicio</Link>
-              </Button>
-            </Flex>
+        <Dialog.Content style={{ maxWidth: 520 }}>
+          <Dialog.Title className="flex items-center gap-2">
+            <CheckCircledIcon />
+            Evento registrado
+          </Dialog.Title>
+          <Dialog.Description size="2" color="var(--color-text)">
+            El evento se registró correctamente.
+          </Dialog.Description>
+          <Flex mt="4" justify="end">
+            <Button onClick={() => {
+              setSuccessOpen(false);
+              navigate("/test-productor-6");
+            }}>
+              Aceptar
+            </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
     </main>
   );
 };
+
+const ZonaConMapa = ({
+  seatMapZonaId,
+  seatMapZonaConfig,
+  currentZonaNombre,
+  tipoEntradaSeleccionadaId,
+  currentSeatSelection,
+  dynamicBlocked,
+  onClose,
+  onSeatChange,
+}) => {
+  return (
+    <div className="rounded-xl border border-zinc-800/70 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <Heading size="3">
+          Distribución de asientos - {currentZonaNombre}
+        </Heading>
+        <Button type="button" variant="gray" onClick={onClose}>
+          Cerrar mapa
+        </Button>
+      </div>
+
+      <Text size="2" color="var(--color-text)">
+        Selecciona los asientos correspondientes a esta zona para el tipo de
+        entrada seleccionado.
+      </Text>
+
+      <SeatMapSelector
+        key={`${seatMapZonaId}-${tipoEntradaSeleccionadaId}`}
+        seatConfig={{
+          rows: seatMapZonaConfig.rows,
+          cols: seatMapZonaConfig.cols,
+          blocked: dynamicBlocked,
+        }}
+        initialSelected={currentSeatSelection}
+        onChange={onSeatChange}
+      />
+    </div>
+  );
+};
+
+const ZonaSinMapa = ({
+  currentZonaNombre,
+  currentQuantityForZone,
+  onCantidadChange,
+  onClear,
+}) => {
+  return (
+    <div className="rounded-xl border border-zinc-800/70 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <Heading size="3">Aforo por zona - {currentZonaNombre}</Heading>
+        <Button type="button" variant="gray" onClick={onClear}>
+          Limpiar selección
+        </Button>
+      </div>
+
+      <Text size="2" color="var(--color-text)">
+        Esta zona no tiene un mapa de asientos configurado. Ingresa la
+        cantidad de entradas del tipo seleccionado que se asignarán a esta
+        zona.
+      </Text>
+
+      <div className="space-y-1 max-w-xs">
+        <label className="text-sm font-medium">
+          Cantidad de entradas para esta zona
+        </label>
+        <TextField.Root
+          inputMode="numeric"
+          value={currentQuantityForZone}
+          onChange={(e) => onCantidadChange(e.target.value)}
+          size="3"
+        />
+      </div>
+    </div>
+  );
+};
+
+export default RegistrarEvento;
