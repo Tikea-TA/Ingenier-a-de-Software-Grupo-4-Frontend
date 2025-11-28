@@ -10,6 +10,7 @@ import {
   obtenerDetalleEvento,
   obtenerZonasPorEstablecimiento,
   obtenerAsientosPorZona,
+  modificarAsiento,
 } from "../../api/ticketService";
 import { useCartStore } from "../../store/useCartStore";
 
@@ -393,10 +394,33 @@ export const SeleccionAsientos = () => {
     }));
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     let itemsAdded = 0;
 
     console.log(selectedSeats);
+    // Bloquear primero los asientos seleccionados en backend
+    if (selectedSeats.length > 0) {
+      try {
+        // bloquear cada asiento; si alguno falla, abortar
+        for (const s of selectedSeats) {
+          const seatId = s.id;
+          try {
+            await modificarAsiento(seatId, { estado: "BLOQUEADO" });
+          } catch (e) {
+            console.error("No se pudo bloquear asiento", seatId, e);
+            setError(
+              `No se pudo reservar temporalmente el asiento ${s.label}. Intenta seleccionar otro.`
+            );
+            return; // abortar la adición al carrito
+          }
+        }
+      } catch (err) {
+        console.error("Error bloqueando asientos:", err);
+        setError("No se pudieron bloquear los asientos. Intenta nuevamente.");
+        return;
+      }
+    }
+
     // Agregar asientos seleccionados (cada elemento es {id,label,tipoEntradaId})
     selectedSeats.forEach((s) => {
       // normalizar y buscar tipo de entrada (aceptar string/number)

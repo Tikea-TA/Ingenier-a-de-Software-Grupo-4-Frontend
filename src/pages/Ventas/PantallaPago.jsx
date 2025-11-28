@@ -5,7 +5,8 @@ import { ArrowLeft, Lock, AlertCircle } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { useCartStore } from "../../store/useCartStore";
 import { useAuthStore } from "../../store/useAuthStore";
-import { crearReserva, crearTicket, obtenerTicketsPorEvento } from "../../api/ticketService";
+import { crearReserva, crearTicket, obtenerTicketsPorEvento, modificarAsiento } from "../../api/ticketService";
+import { enviarMailHtml } from "../../api/mailService";
 
 export const PantallaPago = () => {
   const navigate = useNavigate();
@@ -263,10 +264,12 @@ export const PantallaPago = () => {
       console.debug("ticketsPayload", ticketsPayload);
 
       // Crear todos los tickets y capturar errores individuales
+      const createdAsientoIds = [];
       for (const ticketData of ticketsToCreate) {
         try {
           console.debug("Creando ticket:", ticketData);
           await crearTicket(ticketData);
+          if (ticketData.asientoId != null) createdAsientoIds.push(Number(ticketData.asientoId));
         } catch (ticketErr) {
           // Intentar extraer información útil del error del servidor
           const serverData = ticketErr?.response?.data;
@@ -283,6 +286,21 @@ export const PantallaPago = () => {
             `Error creando ticket: ${serverMsg}` ||
               "Error al crear uno de los tickets. Revisa la consola para más detalles."
           );
+        }
+      }
+
+      // Paso 3: marcar asientos como OCUPADO en backend para los tickets creados
+      if (createdAsientoIds.length > 0) {
+        try {
+          for (const idAsiento of createdAsientoIds) {
+            try {
+              await modificarAsiento(idAsiento, { estado: "OCUPADO" });
+            } catch (e) {
+              console.warn("No se pudo marcar asiento como OCUPADO", idAsiento, e);
+            }
+          }
+        } catch (e) {
+          console.error("Error marcando asientos como OCUPADO:", e);
         }
       }
 
@@ -310,7 +328,27 @@ export const PantallaPago = () => {
 
       sessionStorage.setItem("numeroCompra", reserva.idReserva);
       sessionStorage.setItem("compraData", JSON.stringify(compraData));
-      clearCart();
+        // Enviar correo de confirmación
+        try {
+          const html = `
+            <h2>Confirmación de compra - Nº ${reserva.idReserva}</h2>
+            <p>Hola ${compraData.nombreComprador},</p>
+            <p>Gracias por tu compra. Adjuntamos el resumen de tu compra:</p>
+            <ul>
+              <li>Total: S/ ${compraData.montoTotal.toFixed(2)}</li>
+              <li>Descuento: S/ ${compraData.descuento.toFixed(2)}</li>
+              <li>Asientos: ${compraData.asientos.map(a => a.seatCode || a.zoneName || a.seatNumber || a.id).join(", ")}</li>
+            </ul>
+            <p>Presenta este correo en la entrada o descarga tus tickets desde tu perfil.</p>
+          `;
+          if (compraData.email) {
+            enviarMailHtml({ to: compraData.email, subject: `Confirmación de compra #${reserva.idReserva}`, html }).catch((e) => console.warn("Error enviando email de confirmación:", e));
+          }
+        } catch (e) {
+          console.warn("Error preparando/solicitando envío de email:", e);
+        }
+
+        clearCart();
 
       // Redirigir a confirmación
       navigate("/confirmacion-compra", { state: { compra: compraData } });

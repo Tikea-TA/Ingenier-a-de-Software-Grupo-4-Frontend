@@ -34,9 +34,21 @@ export const obtenerZonasDisponibles = async (eventId) => {
 
 // Obtener zonas por establecimiento (usa controlador de zonas)
 export const obtenerZonasPorEstablecimiento = async (establecimientoId) => {
-  const { data } = await api.get(`/zonas/establecimiento/${establecimientoId}/activas`);
+  const { data } = await api.get(
+    `/zonas/establecimiento/${establecimientoId}/activas`
+  );
   return data;
 };
+
+// Obtener banners
+export const obtenerBannerPorEvento = async (eventId) => {
+  const { data } = await api.get(`/eventos/${eventId}/banner`, {
+    responseType: "blob",
+  });
+
+  return URL.createObjectURL(data); // Devuelve un URL usable en <img>
+};
+
 
 // RESERVAS
 
@@ -73,6 +85,19 @@ export const obtenerReservasPorTaquillero = async (taquilleroId) => {
 // Modificar una reserva
 export const modificarReserva = async (reservaId, reservaData) => {
   const { data } = await api.put(`/reservas/${reservaId}`, reservaData);
+  return data;
+};
+
+// ASIENTOS
+// Obtener asiento por id
+export const obtenerAsientoPorId = async (asientoId) => {
+  const { data } = await api.get(`/asientos/${asientoId}`);
+  return data;
+};
+
+// Modificar asiento (por ejemplo para cambiar estado a BLOQUEADO/OCUPADO)
+export const modificarAsiento = async (asientoId, asientoData) => {
+  const { data } = await api.put(`/asientos/${asientoId}`, asientoData);
   return data;
 };
 
@@ -154,4 +179,3 @@ export const aplicarPromocion = async (promotionId, eventId, asientos) => {
   });
   return data;
 };
-
