@@ -245,7 +245,7 @@ export const EventosDisponibles = () => {
                     <div className="flex items-start gap-2">
                       <Calendar className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
                       <span className="line-clamp-2">
-                        {formatDate(evento.fecha)}
+                        {evento.fecha}, {evento.horaInicio}
                       </span>
                     </div>
 

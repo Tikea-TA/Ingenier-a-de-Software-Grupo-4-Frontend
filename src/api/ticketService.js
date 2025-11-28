@@ -88,6 +88,19 @@ export const modificarReserva = async (reservaId, reservaData) => {
   return data;
 };
 
+// ASIENTOS
+// Obtener asiento por id
+export const obtenerAsientoPorId = async (asientoId) => {
+  const { data } = await api.get(`/asientos/${asientoId}`);
+  return data;
+};
+
+// Modificar asiento (por ejemplo para cambiar estado a BLOQUEADO/OCUPADO)
+export const modificarAsiento = async (asientoId, asientoData) => {
+  const { data } = await api.put(`/asientos/${asientoId}`, asientoData);
+  return data;
+};
+
 // TICKETS
 
 // Crear ticket (después de confirmación de pago)
