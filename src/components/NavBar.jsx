@@ -19,9 +19,13 @@ export default function Navbar() {
     user?.nombreUser ||
     (user?.correo ? user.correo.split("@")[0] : "Usuario");
 
-  // Lógica para mostrar el botón de administración
-  const showAdminPanel = user?.tipoUsuario === "GESTOR" || user?.tipoUsuario === "ADMIN";
-  const showProductorPanel = user?.tipoUsuario === "PRODUCTOR";
+    const tipo = user?.tipoUsuario;
+
+    const showAdminPanel = tipo === "GESTOR" || tipo === "ADMIN";
+    const showProductorPanel = tipo === "PRODUCTOR";
+
+  // Clase común para TODOS los enlaces del menú (Garantiza uniformidad)
+  const linkClass = "text-sm transition hover:text-primary cursor-pointer";
 
   return (
     <header className="border-b border-zinc-800 bg-background-dark text-zinc-100">
@@ -36,13 +40,13 @@ export default function Navbar() {
 
           {/* Navegación principal */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="#" className="text-sm transition hover:text-primary">
+            <Link to="#" className={linkClass}>
               Explorar Eventos
             </Link>
             
             <Link
               to="/registrarProductor"
-              className="text-sm transition hover:text-primary"
+              className={linkClass}
             >
               Colabora con nosotros
             </Link>
@@ -50,13 +54,19 @@ export default function Navbar() {
             {/* ENLACE CONDICIONAL: Administración */}
             {showAdminPanel && (
               <>
-                <Link to="/admin/validar-locales">Validar Locales</Link>
-                <Link to="/admin/validar-eventos">Validar Eventos</Link>
+                <Link to="/admin/validar-locales" className={linkClass}>
+                  Validar Locales
+                </Link>
+                <Link to="/admin/validar-eventos" className={linkClass}>
+                  Validar Eventos
+                </Link>
               </>
             )}
 
             {showProductorPanel && (
-                <Link to="/registrarEvento">Crear Evento</Link>
+                <Link to="/registrarEvento" className={linkClass}>
+                  Crear Evento
+                </Link>
             )}
           </nav>
         </div>
