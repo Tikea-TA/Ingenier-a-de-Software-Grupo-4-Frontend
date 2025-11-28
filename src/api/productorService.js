@@ -70,3 +70,8 @@ export const descargarDocumentoProductor = async (idProductor, nombreArchivo) =>
     alert("No se pudo descargar el documento.");
   }
 };
+
+export const loginProductor = async (credentials) => {
+  const { data } = await api.post("/productores/login", credentials);
+  return data;
+};

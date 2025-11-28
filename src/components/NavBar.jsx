@@ -20,7 +20,8 @@ export default function Navbar() {
     (user?.correo ? user.correo.split("@")[0] : "Usuario");
 
   // Lógica para mostrar el botón de administración
-  const showAdminLocales = user?.areaGestion === "EVENTOS" || user?.areaGestion === "ADMINISTRADOR";
+  const showAdminPanel = user?.tipoUsuario === "GESTOR" || user?.tipoUsuario === "ADMIN";
+  const showProductorPanel = user?.tipoUsuario === "PRODUCTOR";
 
   return (
     <header className="border-b border-zinc-800 bg-background-dark text-zinc-100">
@@ -47,22 +48,15 @@ export default function Navbar() {
             </Link>
 
             {/* ENLACE CONDICIONAL: Administración */}
-            {showAdminLocales && (
+            {showAdminPanel && (
               <>
-                <Link
-                  to="/admin/validar-locales"
-                  className="text-sm transition hover:text-primary"
-                >
-                  Administración locales
-                </Link>
-                
-                <Link 
-                  to="/admin/validar-eventos" 
-                  className="text-sm transition hover:text-primary"
-                >
-                  Validar Eventos
-                </Link>
+                <Link to="/admin/validar-locales">Validar Locales</Link>
+                <Link to="/admin/validar-eventos">Validar Eventos</Link>
               </>
+            )}
+
+            {showProductorPanel && (
+                <Link to="/registrarEvento">Crear Evento</Link>
             )}
           </nav>
         </div>
