@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { obtenerEventosPorProductor } from "../../api/eventoService";
 import { obtenerEstablecimiento } from "../../api/establecimientoService";
 import { obtenerPrecioMinimoEvento } from "../../components/Evento/precioUtils";
 import EventCardProd from "../../components/EventCardProd";
 
 export const TestProductorEvents = () => {
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,9 +14,9 @@ export const TestProductorEvents = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const data = await obtenerEventosPorProductor(20);
+        const data = await obtenerEventosPorProductor(6);
         console.log("Eventos obtenidos del backend:", data);
-        
+
         // Fetch establishment details and zones for each event
         const eventsWithAddressAndPrice = await Promise.all(
           data.map(async (evt) => {
@@ -29,7 +31,7 @@ export const TestProductorEvents = () => {
                 // console.log(`Establecimiento obtenido para evento ${evt.idEvento}:`, establecimiento);
                 address = establecimiento.direccionEstablecimiento || establecimiento.nombreEstablecimiento || address;
               } else if (evt.establecimiento?.direccionEstablecimiento) {
-                 address = evt.establecimiento.direccionEstablecimiento;
+                address = evt.establecimiento.direccionEstablecimiento;
               }
 
               // Fetch Zones for Price using the new utility
@@ -47,7 +49,7 @@ export const TestProductorEvents = () => {
             return {
               id: evt.idEvento,
               title: evt.nombreEvento,
-              image: evt.imagenUrl, 
+              image: evt.imagenUrl,
               badge: evt.estado,
               date: evt.fecha,
               venue: address,
@@ -55,7 +57,7 @@ export const TestProductorEvents = () => {
             };
           })
         );
-        
+
         console.log("Eventos procesados con dirección y precio:", eventsWithAddressAndPrice);
         setEvents(eventsWithAddressAndPrice);
       } catch (err) {
@@ -91,10 +93,18 @@ export const TestProductorEvents = () => {
   return (
     <div className="min-h-screen bg-slate-950 p-8">
       <div className="mx-auto max-w-7xl">
-        <h1 className="mb-8 text-3xl font-bold text-white">
-          Eventos del Productor #20
-        </h1>
-        
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-white">
+            Eventos del Productor #20
+          </h1>
+          <button
+            onClick={() => navigate('/registrarEvento')}
+            className="rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-slate-950"
+          >
+            + Registrar Nuevo Evento
+          </button>
+        </div>
+
         {events.length === 0 ? (
           <p className="text-zinc-400">No se encontraron eventos para este productor.</p>
         ) : (

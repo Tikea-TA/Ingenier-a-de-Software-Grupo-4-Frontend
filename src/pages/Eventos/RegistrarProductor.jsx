@@ -85,16 +85,16 @@ export const RegistrarProductor = () => {
         nombre: data.rep_nombre,
         apellidos: data.rep_apellidos,
         email: data.email,
-        password: "Test1234@", 
+        password: "Test1234@",
         telefono: data.telefono,
-        nombreUsuario: data.rep_nombre.toLowerCase() + data.ruc, 
+        nombreUsuario: data.rep_nombre.toLowerCase() + data.ruc,
         dni: data.doc_numero,
 
-        idGestor: 18, // Valor fijo de tu ejemplo
+        idGestor: 1, // Valor fijo de tu ejemplo
         razonSocial: data.razon, // El name="razon" en tu form
         ruc: data.ruc,
         direccionFisica: "Por registrar",
-        tipoEstadoProductor: "PENDIENTE_VALIDACION", 
+        tipoEstadoProductor: "PENDIENTE_VALIDACION",
         documentacionFisica: documentoBase64, // 7. Se añade el Base64
       };
 

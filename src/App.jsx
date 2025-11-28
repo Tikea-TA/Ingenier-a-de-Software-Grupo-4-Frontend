@@ -54,7 +54,7 @@ function App() {
           <Route path="/promocion/registrarPromocion" element={<RegistrarPromocion />} />
           <Route path="/promocion/editar/:id" element={<EditarPromocion />} />
 
-          <Route path="/test-productor-20" element={<TestProductorEvents />} />
+          <Route path="/test-productor-6" element={<TestProductorEvents />} />
           <Route path="/eventos/detalle/:id" element={<DetalleEvento />} />
           <Route path="/admin/validar-locales" element={<ValidarLocales />} />
           <Route path="/admin/validar-productores" element={<ValidarProductores />} />
