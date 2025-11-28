@@ -10,7 +10,7 @@ import {
 } from "@radix-ui/themes";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 
 import { ListaLocales, TiposEvento } from "../../lib/mock";
@@ -18,6 +18,9 @@ import { ListaLocales, TiposEvento } from "../../lib/mock";
 import StadiumZoneMapSelector from "../../components/StadiumZoneMapSelector";
 import TheaterZoneMapSelector from "../../components/TheaterZoneMapSelector";
 import SeatMapSelector from "../../components/SeatMapSelector";
+
+import { useAuthStore } from "../../store/useAuthStore";
+import { registrarEvento } from "../../api/eventoService";
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -52,6 +55,8 @@ function buildInitialZoneStateFromMock(configuracionLocal) {
 }
 
 export const RegistrarEvento = () => {
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [errors, setErrors] = useState({});
   const [successOpen, setSuccessOpen] = useState(false);
 
@@ -200,7 +205,7 @@ export const RegistrarEvento = () => {
     );
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const newErrors = {};
@@ -285,13 +290,37 @@ export const RegistrarEvento = () => {
         return;
       }
     }
+    // Separar fecha y hora
+    const dateObj = new Date(fechaHora);
+    const fecha = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
+    const horaInicio = dateObj.toTimeString().split(" ")[0]; // HH:MM:SS
+
+    // Calcular hora fin estimada (2 horas después)
+    const dateFin = new Date(dateObj.getTime() + 2 * 60 * 60 * 1000);
+    const horaFin = dateFin.toTimeString().split(" ")[0];
+
+    // Mapeo de IDs a Enums del Backend
+    const CATEGORY_MAPPING = {
+      "158": "CONCIERTO",
+      "585": "TEATRO",
+    };
 
     const payload = {
+      idEstablecimiento: Number(localSeleccionado),
+      idProductor: user?.idProductor,
+      idGestor: 1, // Valor por defecto o mock
       nombreEvento: nombreEvento.trim(),
-      fechaHora,
-      idLocal: localSeleccionado,
-      tipoEvento: tipoEventoSeleccionado,
-      capacidadMaximaEvento: capacidadEventoNum,
+      categoria: CATEGORY_MAPPING[tipoEventoSeleccionado],
+      fecha: fecha,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
+      estado: "PENDIENTE_VALIDACION",
+      aforoTotal: capacidadEventoNum,
+      documentacionAdjunta: docBase64,
+      banner: bannerBase64,
+
+      // Campos adicionales que el frontend maneja pero el backend
+      // tal vez ignore o necesite en otro endpoint:
       tiposEntrada: tiposEntrada.map((t) => ({
         nombre: t.nombre.trim(),
         tipo: t.tipo,
@@ -301,12 +330,11 @@ export const RegistrarEvento = () => {
         asientosPorZona: t.asientosPorZona || {},
         cantidadesPorZona: t.cantidadesPorZona || {},
       })),
-      bannerBase64,
-      documentacionBase64: docBase64,
       seatMapZonaId,
     };
 
     console.log("Payload evento:", payload);
+    await registrarEvento(payload);
     setSuccessOpen(true);
   };
 
@@ -928,10 +956,15 @@ export const RegistrarEvento = () => {
             Evento registrado
           </Dialog.Title>
           <Dialog.Description size="2" color="var(--color-text)">
-            El evento se registró correctamente (mock).
+            El evento se registró correctamente.
           </Dialog.Description>
           <Flex mt="4" justify="end">
-            <Button onClick={() => setSuccessOpen(false)}>Cerrar</Button>
+            <Button onClick={() => {
+              setSuccessOpen(false);
+              navigate("/test-productor-6");
+            }}>
+              Aceptar
+            </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>

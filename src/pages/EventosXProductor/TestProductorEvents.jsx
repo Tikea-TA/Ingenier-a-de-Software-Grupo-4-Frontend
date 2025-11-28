@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/useAuthStore";
 import { obtenerEventosPorProductor } from "../../api/eventoService";
 import { obtenerEstablecimiento } from "../../api/establecimientoService";
 import { obtenerPrecioMinimoEvento } from "../../components/Evento/precioUtils";
@@ -7,6 +8,7 @@ import EventCardProd from "../../components/EventCardProd";
 
 export const TestProductorEvents = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,7 +16,15 @@ export const TestProductorEvents = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const data = await obtenerEventosPorProductor(6);
+        if (!user?.idProductor) {
+          console.warn("No hay idProductor en el usuario logueado:", user);
+          // Podríamos redirigir o mostrar error, pero por ahora solo logueamos
+        }
+
+        const id = user?.idProductor || 6; // Fallback a 6 si no hay id (para pruebas) o manejar error
+        console.log("Fetching events for producer ID:", id);
+
+        const data = await obtenerEventosPorProductor(id);
         console.log("Eventos obtenidos del backend:", data);
 
         // Fetch establishment details and zones for each event
@@ -95,7 +105,7 @@ export const TestProductorEvents = () => {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">
-            Eventos del Productor #20
+            Eventos del Productor #{user?.idProductor || "?"}
           </h1>
           <button
             onClick={() => navigate('/registrarEvento')}
