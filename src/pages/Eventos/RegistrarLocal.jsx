@@ -191,7 +191,7 @@ export const RegistrarLocal = () => {
     }
 
     const tipoLocal = mapTipoEspacioToBackend(tipoEspacio);
-    const idGestor = 18; // Gestor de eventos
+    const idGestor = 1; // Gestor de eventos
 
     // ===== Construir TRAMA de configuración de zonas & asientos =====
     let configuracionLocal = null;
