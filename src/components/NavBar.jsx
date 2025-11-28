@@ -22,8 +22,13 @@ export default function Navbar() {
     user?.nombreUser ||
     (user?.correo ? user.correo.split("@")[0] : "Usuario");
 
-  // Lógica para mostrar el botón de administración
-  const showAdminLocales = user?.areaGestion === "EVENTOS" || user?.areaGestion === "ADMINISTRADOR";
+    const tipo = user?.tipoUsuario;
+
+    const showAdminPanel = tipo === "GESTOR" || tipo === "ADMIN";
+    const showProductorPanel = tipo === "PRODUCTOR";
+
+  // Clase común para TODOS los enlaces del menú (Garantiza uniformidad)
+  const linkClass = "text-sm transition hover:text-primary cursor-pointer";
 
   return (
     <header className="border-b border-zinc-800 bg-background-dark text-zinc-100">
@@ -38,34 +43,33 @@ export default function Navbar() {
 
           {/* Navegación principal */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/eventos" className="text-sm transition hover:text-primary">
+            <Link to="/eventos" className={linkClass}>
               Explorar Eventos
             </Link>
             
             <Link
               to="/registrarProductor"
-              className="text-sm transition hover:text-primary"
+              className={linkClass}
             >
               Colabora con nosotros
             </Link>
 
             {/* ENLACE CONDICIONAL: Administración */}
-            {showAdminLocales && (
+            {showAdminPanel && (
               <>
-                <Link
-                  to="/admin/validar-locales"
-                  className="text-sm transition hover:text-primary"
-                >
-                  Administración locales
+                <Link to="/admin/validar-locales" className={linkClass}>
+                  Validar Locales
                 </Link>
-                
-                <Link 
-                  to="/admin/validar-eventos" 
-                  className="text-sm transition hover:text-primary"
-                >
+                <Link to="/admin/validar-eventos" className={linkClass}>
                   Validar Eventos
                 </Link>
               </>
+            )}
+
+            {showProductorPanel && (
+                <Link to="/registrarEvento" className={linkClass}>
+                  Crear Evento
+                </Link>
             )}
           </nav>
         </div>

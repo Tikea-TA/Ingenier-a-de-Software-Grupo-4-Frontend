@@ -20,13 +20,8 @@ export const registrarCliente = async (formData) => {
 };
 
 // Login cliente
-export const loginCliente = async ({ email, password }) => {
-  const payload = {
-    correo: email,
-    password,
-  };
-
-  const { data } = await api.post("/clientes/login", payload);
+export const loginCliente = async (credentials) => {
+  const { data } = await api.post("/clientes/login", credentials);
   return data;
 };
 

@@ -12,9 +12,10 @@ function Validation(formData) {
 
   if (formData.password === "") {
     error.password = "La contraseña no debe estar vacía";
-  } else if (!password_pattern.test(formData.password)) {
-    error.password = "La contraseña no coincide";
-  }
+  } 
+  // else if (!password_pattern.test(formData.password)) {
+  //   error.password = "La contraseña no coincide";
+  // }
 
   return error;
 }
