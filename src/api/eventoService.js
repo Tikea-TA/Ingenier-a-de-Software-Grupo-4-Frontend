@@ -84,8 +84,16 @@ export const eliminarEvento = async (idEvento) => {
   return data;
 };
 
+
 export const generarReporteDetalladoDeEventos = async (payload) => {
   const { data } = await api.post("/eventos/eventosReporte", payload);
+  return data;
+};
+
+export const obtenerBanner = async (idEvento) => {
+  const { data } = await api.get(`/eventos/${idEvento}/banner`, {
+    responseType: 'blob',
+  });
   return data;
 };
 

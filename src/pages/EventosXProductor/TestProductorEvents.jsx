@@ -105,7 +105,7 @@ export const TestProductorEvents = () => {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">
-            Eventos del Productor #{user?.idProductor || "?"}
+            Tus Eventos
           </h1>
           <button
             onClick={() => navigate('/registrarEvento')}

@@ -1,12 +1,40 @@
+import { useState, useEffect } from "react";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import { useNavigate } from "react-router-dom";
+import { obtenerBanner } from "../api/eventoService";
 
 export default function EventCardProd({ event }) {
   const navigate = useNavigate();
+  const [bannerUrl, setBannerUrl] = useState(null);
+
+  useEffect(() => {
+    const fetchBanner = async () => {
+      try {
+        const blob = await obtenerBanner(event.id);
+        const url = URL.createObjectURL(blob);
+        setBannerUrl(url);
+      } catch (error) {
+        console.error("Error fetching banner:", error);
+        // Fallback to placeholder if banner fetch fails
+        setBannerUrl(`https://picsum.photos/seed/${event.id}/800/450`);
+      }
+    };
+
+    if (event.id) {
+      fetchBanner();
+    }
+
+    // Cleanup function to revoke object URL
+    return () => {
+      if (bannerUrl && bannerUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(bannerUrl);
+      }
+    };
+  }, [event.id]);
 
   const handleDetailsClick = () => {
-    navigate(`/eventos/detalle/${event.id}`);
+    navigate(`/productor/eventos/detalle/${event.id}`);
   };
 
   // Format date to "DD MMM" format (e.g., "25 Nov")
@@ -22,7 +50,7 @@ export default function EventCardProd({ event }) {
   return (
     <div className="overflow-hidden rounded-xl bg-slate-900 ring-1 ring-white/10">
       <img
-        src={event.image || `https://picsum.photos/seed/${event.id}/800/450`}
+        src={bannerUrl || `https://picsum.photos/seed/${event.id}/800/450`}
         alt={event.title}
         className="h-40 w-full object-cover"
       />
