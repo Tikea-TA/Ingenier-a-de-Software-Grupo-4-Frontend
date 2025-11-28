@@ -16,6 +16,8 @@ import TheaterZoneMap from "../../components/TheaterZoneMap";
 import SeatMapEditor from "../../components/SeatMapEditor";
 import Button from "../../components/ui/Button";
 import { registrarEstablecimiento } from "../../api/registrarEstablecimiento";
+import { crearZona } from "../../api/zonaService";
+import { registrarAsiento } from "../../api/asientoService";
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -264,6 +266,8 @@ export const RegistrarLocal = () => {
       };
     }
 
+    // Payload inicial SIN configuracionLocal (o ignorada por backend si se enviara)
+    // El usuario pidió usar los servicios de zona y asiento explícitamente.
     const payload = {
       idGestor,
       nombreEstablecimiento: data.nombre.trim(),
@@ -272,20 +276,107 @@ export const RegistrarLocal = () => {
       capacidadMaxima: Number(data.capacidad),
       estado: ESTADO_INICIAL_LOCAL,
       documentacionAdjunta: documentoBase64,
-      // Adjuntamos la trama de configuración al payload
-      configuracionLocal,
+      // configuracionLocal, // NO enviamos esto para crearlo manualmente
     };
 
     try {
       setIsSubmitting(true);
-      console.log("Payload establecimiento:", payload);
-      await registrarEstablecimiento(payload);
+      console.log("Registrando establecimiento...", payload);
+      const respEstablecimiento = await registrarEstablecimiento(payload);
+      const idEstablecimiento = respEstablecimiento.idEstablecimiento; 
+
+      if (!idEstablecimiento) {
+        throw new Error("El backend no devolvió el ID del establecimiento creado.");
+      }
+
+      console.log("Establecimiento creado con ID:", idEstablecimiento);
+
+      // ===== CREACIÓN MANUAL DE ZONAS Y ASIENTOS =====
+      
+      // Helper para nombre de fila (A, B, ... AA, AB)
+      const getRowName = (index) => {
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        if (index < 26) return letters[index];
+        return letters[Math.floor(index / 26) - 1] + letters[index % 26];
+      };
+
+      // Array de zonas a procesar
+      let zonasAProcesar = [];
+
+      if (tipoEspacio === "auditorio") {
+        // Auditorio se trata como una única zona "GENERAL"
+        zonasAProcesar.push({
+          nombreZona: "GENERAL",
+          capacidad: Number(data.capacidad), // Capacidad total
+          tieneDistribucionAsientos: configuracionLocal.tieneDistribucionAsientos,
+          mapaAsientos: configuracionLocal.mapaAsientos
+        });
+      } else {
+        // Estadio o Teatro
+        Object.values(configuracionLocal.zonas).forEach(z => {
+          if (z.habilitada) {
+            zonasAProcesar.push({
+              nombreZona: z.nombreZona,
+              capacidad: 100, // TODO: La UI no pide capacidad por zona, asumimos un default o repartimos?
+              tieneDistribucionAsientos: z.tieneDistribucionAsientos,
+              mapaAsientos: z.mapaAsientos
+            });
+          }
+        });
+      }
+
+      // Procesar cada zona secuencialmente
+      for (const zonaInfo of zonasAProcesar) {
+        console.log(`Creando zona: ${zonaInfo.nombreZona}`);
+        
+        const zonaPayload = {
+          idEstablecimiento,
+          nombreZona: zonaInfo.nombreZona,
+          capacidad: zonaInfo.capacidad // Backend debe manejar esto
+        };
+
+        const respZona = await crearZona(zonaPayload);
+        const idZona = respZona.idZona;
+
+        if (zonaInfo.tieneDistribucionAsientos && zonaInfo.mapaAsientos && idZona) {
+          const { filas, columnas, asientosBloqueados } = zonaInfo.mapaAsientos;
+          
+          // Crear asientos
+          // Esto puede ser lento si son muchos, pero es lo solicitado.
+          // Optimizacion: Promise.all por filas
+          const blockedSet = new Set(asientosBloqueados.map(b => `${b.fila},${b.columna}`));
+
+          const promesasAsientos = [];
+          for (let r = 0; r < filas; r++) {
+            for (let c = 0; c < columnas; c++) {
+              if (!blockedSet.has(`${r},${c}`)) {
+                const nombreAsiento = `${getRowName(r)}${c + 1}`;
+                const asientoPayload = {
+                  idZona,
+                  nombreAsiento,
+                  fila: r,
+                  columna: c,
+                  estado: "DISPONIBLE" // Enum backend: DISPONIBLE
+                };
+                promesasAsientos.push(registrarAsiento(asientoPayload));
+              }
+            }
+          }
+          
+          // Ejecutar en paralelo (cuidado con rate limits)
+          if (promesasAsientos.length > 0) {
+             console.log(`Creando ${promesasAsientos.length} asientos para zona ${zonaInfo.nombreZona}...`);
+             await Promise.all(promesasAsientos);
+          }
+        }
+      }
+
       setSuccessOpen(true);
     } catch (err) {
-      console.error("Error al registrar establecimiento:", err);
+      console.error("Error al registrar establecimiento o sus detalles:", err);
       const msg =
         err?.response?.data?.message ||
-        "No se pudo registrar el local. Intenta nuevamente.";
+        "No se pudo registrar el local o sus zonas. Intenta nuevamente.";
       setApiError(msg);
     } finally {
       setIsSubmitting(false);
