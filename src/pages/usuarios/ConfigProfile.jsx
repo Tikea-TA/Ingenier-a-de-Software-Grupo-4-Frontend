@@ -26,7 +26,7 @@ export const ConfigProfile = () => {
     if (user) {
       setFormData((prev) => ({
         ...prev,
-        username: user.nombreUser || user.correo || "",
+        username: user.nombreUsuario || user.correo || "",
         phonenumber: user.telefono || "",
         email: user.correo || "",
         address: user.direccion || "",

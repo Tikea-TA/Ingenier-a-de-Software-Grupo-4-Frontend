@@ -1,9 +1,54 @@
 import api from "./axiosConfig";
 
+export const obtenerTodosEstablecimientos = async () => {
+  const { data } = await api.get("/establecimientos");
+  return data;
+};
+
+export const registrarEstablecimiento = async (payload) => {
+  const { data } = await api.post("/establecimientos/registro", payload);
+  return data;
+};
+
+export const obtenerEstablecimiento = async (idEstablecimiento) => {
+  const { data } = await api.get(`/establecimientos/${idEstablecimiento}`);
+  return data;
+};
+
+export const obtenerEstablecimientosPorGestor = async (idGestor) => {
+  const { data } = await api.get(`/establecimientos/gestor/${idGestor}`);
+  return data;
+};
+
+export const obtenerEstablecimientosActivosPorGestor = async (idGestor) => {
+  const { data } = await api.get(`/establecimientos/gestor/${idGestor}/activos`);
+  return data;
+};
+
+export const obtenerEstablecimientosPorTipo = async (tipo) => {
+  const { data } = await api.get(`/establecimientos/tipo/${tipo}`);
+  return data;
+};
+
+export const obtenerEstablecimientosPorEstado = async (estado) => {
+  const { data } = await api.get(`/establecimientos/estado/${estado}`);
+  return data;
+};
+
+export const obtenerEstablecimientosActivos = async () => {
+  const { data } = await api.get("/establecimientos/activos");
+  return data;
+};
+
+export const actualizarEstablecimiento = async (idEstablecimiento, payload) => {
+  const { data } = await api.put(`/establecimientos/${idEstablecimiento}`, payload);
+  return data;
+};
+
 // Obtener solo los locales pendientes
 export const obtenerLocalesPendientes = async (idGestor = null) => {
   let url = "/establecimientos/estado/PENDIENTE_VALIDACION";
-  
+
   // Si tenemos un ID de gestor, usamos el endpoint específico
   if (idGestor) {
     url = `/establecimientos/gestor/${idGestor}/estado/PENDIENTE_VALIDACION`;
@@ -16,11 +61,28 @@ export const obtenerLocalesPendientes = async (idGestor = null) => {
 // Actualizar el estado (Aprobar o Rechazar)
 export const validarLocal = async (idEstablecimiento, nuevoEstado) => {
   const payload = {
-    estado: nuevoEstado, 
+    estado: nuevoEstado,
     fechaVerificacion: new Date().toISOString()
   };
   const { data } = await api.put(`/establecimientos/${idEstablecimiento}`, payload);
   return data;
+};
+
+export const eliminarEstablecimiento = async (idEstablecimiento) => {
+  const { data } = await api.delete(`/establecimientos/${idEstablecimiento}`);
+  return data;
+};
+
+export const obtenerEstablecimientosPorEstadoYGestor = async (idGestor, estado) => {
+  const { data } = await api.get(`/establecimientos/gestor/${idGestor}/estado/${estado}`);
+  return data;
+};
+
+export const descargarDocumentacion = async (idEstablecimiento) => {
+  const response = await api.get(`/establecimientos/${idEstablecimiento}/documento`, {
+    responseType: "blob",
+  });
+  return response.data;
 };
 
 // Función para descargar el archivo directamente
@@ -43,3 +105,4 @@ export const descargarDocumento = async (idEstablecimiento, nombreArchivo) => {
     alert("No se pudo descargar el documento (puede que no exista).");
   }
 };
+

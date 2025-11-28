@@ -1,12 +1,15 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Ticket } from "lucide-react";
+import { Ticket, ShoppingCart } from "lucide-react";
 import SearchBar from "./SearchBar";
 import Button from "./ui/Button";
 import { useAuthStore } from "../store/useAuthStore";
+import { useCartStore } from "../store/useCartStore";
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  const itemsCount = useCartStore((s) => (s.items || []).reduce((a, b) => a + (b.quantity || 1), 0));
 
   const handleLogout = () => {
     logout();
@@ -40,7 +43,7 @@ export default function Navbar() {
 
           {/* Navegación principal */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="#" className={linkClass}>
+            <Link to="/eventos" className={linkClass}>
               Explorar Eventos
             </Link>
             
@@ -78,6 +81,17 @@ export default function Navbar() {
 
         {/* Zona derecha: auth */}
         <nav className="flex items-center gap-4">
+          <Link to="/resumen-compra" className="relative">
+            <Button className="text-xs px-3 py-1.5 flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Carrito</span>
+              {itemsCount > 0 && (
+                <span className="absolute -top-1 -right-2 inline-flex items-center justify-center rounded-full bg-primary px-2 text-xs font-semibold">
+                  {itemsCount}
+                </span>
+              )}
+            </Button>
+          </Link>
           {isAuthenticated ? (
             <>
               {/* Nombre usuario */}

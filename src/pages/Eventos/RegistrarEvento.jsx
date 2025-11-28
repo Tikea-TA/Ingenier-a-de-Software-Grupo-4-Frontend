@@ -532,7 +532,7 @@ export const RegistrarEvento = () => {
                       <Select.Content
                         position="popper"
                         sideOffset={4}
-                        className="w-[var(--radix-select-trigger-width)]"
+                        className="w-(--radix-select-trigger-width)"
                       >
                         {ListaLocales.map((loc) => (
                           <Select.Item
@@ -607,7 +607,7 @@ export const RegistrarEvento = () => {
                       <Select.Content
                         position="popper"
                         sideOffset={4}
-                        className="w-[var(--radix-select-trigger-width)]"
+                        className="w-(--radix-select-trigger-width)"
                       >
                         {TiposEvento.map((tipo) => (
                           <Select.Item key={tipo.value} value={String(tipo.value)}>
