@@ -23,6 +23,7 @@ import { TestProductorEvents } from "./pages/EventosXProductor/TestProductorEven
 import { ValidarLocales } from "./pages/Admin/ValidarLocales";
 import { ValidarProductores } from "./pages/Admin/ValidarProductores";
 import { ValidarEventos } from "./pages/Admin/ValidarEventos";
+import { AdminRoute } from "./components/AdminRoute";
 
 function App() {
   return (
@@ -56,9 +57,14 @@ function App() {
 
           <Route path="/test-productor-6" element={<TestProductorEvents />} />
           <Route path="/eventos/detalle/:id" element={<DetalleEvento />} />
-          <Route path="/admin/validar-locales" element={<ValidarLocales />} />
-          <Route path="/admin/validar-productores" element={<ValidarProductores />} />
-          <Route path="/admin/validar-eventos" element={<ValidarEventos />} />
+
+          {/* RUTAS DE ADMINISTRACIÓN (Solo Gestores de Eventos/Admin) */}
+          {/* Aquí aplicamos la nueva seguridad */}
+          <Route element={<AdminRoute />}>
+             <Route path="/admin/validar-locales" element={<ValidarLocales />} />
+             <Route path="/admin/validar-productores" element={<ValidarProductores />} />
+             <Route path="/admin/validar-eventos" element={<ValidarEventos />} />
+          </Route>
         </Route>
       </Routes>
     </>
