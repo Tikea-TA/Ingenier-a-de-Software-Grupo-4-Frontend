@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Heading, Text } from "@radix-ui/themes";
+import { useAuthStore } from "../../store/useAuthStore";
 import { ArrowLeft, Download, Share2, Copy } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import Button from "../../components/ui/Button";
@@ -12,6 +13,20 @@ export const DetalleEntrada = () => {
   const [copiado, setCopiado] = useState(false);
 
   const compra = location.state?.compra;
+  const user = useAuthStore((state) => state.user);
+
+  // Normalize event/purchase fields to handle different backend shapes
+  const eventName =
+    compra?.evento?.nombreEvento || compra?.evento?.nombre || compra?.evento?.titulo || "Evento";
+
+  const eventDate =
+    compra?.evento?.fechaHora || compra?.evento?.fecha || compra?.evento?.fechaEmision || compra?.fechaCompra;
+
+  const eventLocation = compra?.evento?.local || compra?.evento?.ubicacion || compra?.evento?.nombreZona || "Ubicación";
+
+  const montoTotalNum = Number(compra?.montoTotal ?? compra?.total ?? compra?.totalPrice ?? 0);
+  const descuentoNum = Number(compra?.descuento ?? 0);
+  const subtotalNum = montoTotalNum + descuentoNum;
 
   if (!compra) {
     return (
@@ -51,12 +66,16 @@ export const DetalleEntrada = () => {
   };
 
   const handleDescargar = () => {
-    // En una aplicación real, esto descargaría el PDF
-    console.log("Descargar entrada:", numeroCompra);
+    // Abrir diálogo de impresión para "descargar/guardar" la entrada
+    try {
+      window.print();
+    } catch (e) {
+      console.error("No se pudo abrir la impresión:", e);
+    }
   };
 
   const handleCompartir = async () => {
-    const texto = `Voy al evento: ${compra.evento.nombre}. ¡Te espero allá! #Tikea`;
+    const texto = `Voy al evento: ${eventName}. ¡Te espero allá! #Tikea`;
     if (navigator.share) {
       navigator.share({
         title: "Tikea - Mis entradas",
@@ -68,12 +87,16 @@ export const DetalleEntrada = () => {
 
   const qrValue = JSON.stringify({
     numeroCompra: compra.numeroCompra,
-    evento: compra.evento.nombre,
+    evento: eventName,
     email: compra.email,
+    codigo: compra.codigoBase64 || compra.codigo || null,
   });
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("es-ES", {
+    if (!dateString) return "-";
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return dateString;
+    return d.toLocaleDateString("es-ES", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -107,11 +130,11 @@ export const DetalleEntrada = () => {
       <div className="mx-auto max-w-4xl px-4 py-8">
         {/* Información del evento */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden mb-8">
-          {compra.evento.banner && (
+          {compra.evento?.banner && (
             <div className="w-full h-80 overflow-hidden">
               <img
                 src={compra.evento.banner}
-                alt={compra.evento.nombre}
+                alt={eventName}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -119,20 +142,18 @@ export const DetalleEntrada = () => {
 
           <div className="p-8">
             <Heading size="6" className="mb-2">
-              {compra.evento.nombre}
+              {eventName}
             </Heading>
 
             <div className="grid gap-4 md:grid-cols-2 mb-6">
               <div>
                 <p className="text-sm text-subtle mb-1">Fecha y Hora</p>
-                <p className="font-medium">
-                  {formatDate(compra.evento.fechaHora)}
-                </p>
+                <p className="font-medium">{formatDate(eventDate)}</p>
               </div>
 
               <div>
                 <p className="text-sm text-subtle mb-1">Ubicación</p>
-                <p className="font-medium">{compra.evento.local}</p>
+                <p className="font-medium">{eventLocation}</p>
               </div>
             </div>
 
@@ -215,30 +236,29 @@ export const DetalleEntrada = () => {
               </Heading>
 
               <div className="space-y-3">
-                {compra.asientos && compra.asientos.length > 0 ? (
-                  compra.asientos.map((asiento, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center p-4 rounded-lg bg-zinc-800/50 border border-zinc-700"
-                    >
-                      <div>
-                        <p className="font-medium">
-                          {asiento.tipoEntrada || "Entrada General"}
-                        </p>
-                        <p className="text-sm text-subtle">
-                          {asiento.tipo === "seat"
-                            ? `Asiento ${asiento.numero}`
-                            : `Zona ${asiento.zona}`}
-                        </p>
-                      </div>
-                      <p className="text-primary font-bold">
-                        S/ {asiento.precio?.toFixed(2) || "0.00"}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-subtle">Sin asientos registrados</p>
-                )}
+                  {compra.asientos && compra.asientos.length > 0 ? (
+                    compra.asientos.map((asiento, idx) => {
+                      const asientoLabel =
+                        asiento.codigoAsiento || asiento.numero || asiento.asiento?.numero || asiento.asiento?.codigoAsiento || asiento.zona || "-";
+                      const precio = Number(asiento.precio || asiento.price || asiento.precioCompra || 0);
+                      return (
+                        <div
+                          key={idx}
+                          className="flex justify-between items-center p-4 rounded-lg bg-zinc-800/50 border border-zinc-700"
+                        >
+                          <div>
+                            <p className="font-medium">{asiento.tipoEntrada || "Entrada General"}</p>
+                            <p className="text-sm text-subtle">
+                              {asiento.tipo === "seat" ? `Asiento ${asientoLabel}` : `Zona ${asientoLabel}`}
+                            </p>
+                          </div>
+                          <p className="text-primary font-bold">S/ {precio.toFixed(2)}</p>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-subtle">Sin asientos registrados</p>
+                  )}
               </div>
             </div>
 
@@ -251,23 +271,19 @@ export const DetalleEntrada = () => {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-subtle">Subtotal</span>
-                  <span>
-                    S/ {(compra.montoTotal + (compra.descuento || 0)).toFixed(2)}
-                  </span>
+                  <span> S/ {subtotalNum.toFixed(2)} </span>
                 </div>
 
-                {compra.descuento > 0 && (
+                {descuentoNum > 0 && (
                   <div className="flex justify-between text-sm text-green-400">
                     <span>Descuento</span>
-                    <span>-S/ {compra.descuento.toFixed(2)}</span>
+                    <span>-S/ {descuentoNum.toFixed(2)}</span>
                   </div>
                 )}
 
                 <div className="border-t border-zinc-700 pt-3 flex justify-between text-lg font-bold">
                   <span>Total Pagado</span>
-                  <span className="text-primary">
-                    S/ {compra.montoTotal.toFixed(2)}
-                  </span>
+                  <span className="text-primary"> S/ {montoTotalNum.toFixed(2)} </span>
                 </div>
               </div>
             </div>
@@ -303,19 +319,19 @@ export const DetalleEntrada = () => {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-subtle mb-1">Nombre</p>
-                  <p className="font-medium">{compra.nombreComprador}</p>
+                  <p className="font-medium">{compra.nombreComprador || compra.nombre || user?.nombre || user?.nombreUsuario || "-"}</p>
                 </div>
 
                 <div>
                   <p className="text-xs text-subtle mb-1">Correo</p>
                   <p className="font-medium text-sm break-all">
-                    {compra.email}
+                    {compra.email || user?.correo || user?.email || "-"}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-xs text-subtle mb-1">Teléfono</p>
-                  <p className="font-medium">{compra.telefono}</p>
+                  <p className="font-medium">{compra.telefono || user?.telefono || "-"}</p>
                 </div>
               </div>
             </div>

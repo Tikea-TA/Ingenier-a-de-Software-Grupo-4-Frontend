@@ -4,7 +4,7 @@ import { Heading, Text, Separator } from "@radix-ui/themes";
 import { Ticket, Calendar, MapPin, Download, Eye } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { useAuthStore } from "../../store/useAuthStore";
-import { obtenerTicketsPorCliente } from "../../api/ticketService";
+import { obtenerTicketsPorCliente, obtenerBannerPorEvento, obtenerDetalleEvento } from "../../api/ticketService";
 
 export const MisEntradas = () => {
   const navigate = useNavigate();
@@ -12,6 +12,8 @@ export const MisEntradas = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const [entradas, setEntradas] = useState([]);
+  const [bannersMap, setBannersMap] = useState({});
+  const [eventDetailsMap, setEventDetailsMap] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtro, setFiltro] = useState("todas");
@@ -25,8 +27,63 @@ export const MisEntradas = () => {
     const cargarEntradas = async () => {
       try {
         setIsLoading(true);
-        const data = await obtenerTicketsPorCliente(user?.id);
+        // Normalizar posibles nombres de id en el objeto user
+        const clientId =
+          user?.id ||
+          user?.idCliente ||
+          user?.clienteId ||
+          user?.id_usuario ||
+          user?.idUsuario ||
+          user?.id_cliente ||
+          null;
+        console.log("Cargando entradas para cliente id:", clientId);
+        if (!clientId) {
+          setError("No se pudo determinar el id del usuario. Vuelve a iniciar sesión.");
+          setIsLoading(false);
+          return;
+        }
+
+        const data = await obtenerTicketsPorCliente(clientId);
         setEntradas(data || []);
+        // After storing tickets, fetch banners and event details for the events present
+        try {
+          const eventoIds = Array.from(new Set((data || []).map((t) => t.eventoId || t.evento?.idEvento).filter(Boolean)));
+          const bannerMap = {};
+          const detailsMap = {};
+
+          await Promise.all(
+            eventoIds.map(async (id) => {
+              try {
+                const [banner, detalle] = await Promise.all([
+                  (async () => {
+                    try {
+                      return await obtenerBannerPorEvento(id);
+                    } catch (e) {
+                      return null;
+                    }
+                  })(),
+                  (async () => {
+                    try {
+                      return await obtenerDetalleEvento(id);
+                    } catch (e) {
+                      return null;
+                    }
+                  })(),
+                ]);
+
+                if (banner) bannerMap[id] = banner;
+                if (detalle) detailsMap[id] = detalle;
+              } catch (e) {
+                // ignore per-event errors
+              }
+            })
+          );
+
+          setBannersMap(bannerMap);
+          setEventDetailsMap(detailsMap);
+        } catch (e) {
+          console.warn("No se pudieron cargar banners/detalles para MisEntradas", e);
+        }
       } catch (err) {
         setError("No se pudieron cargar tus entradas. Intenta nuevamente.");
         console.error(err);
@@ -140,24 +197,66 @@ export const MisEntradas = () => {
               const compras = Object.keys(groupByReserva).map((key) => {
                 const tickets = groupByReserva[key];
                 const primera = tickets[0] || {};
-                const evento = primera.evento || primera.eventoResponse || primera.eventoVo || {};
+                // Muchos campos vienen planos en el TicketResponse; usar esos como prioridad.
                 const montoTotal = tickets.reduce((s, t) => s + (t.precio || t.precioCompra || t.price || 0), 0);
                 const asientos = tickets.map((t) => ({
-                  numero: t.numeroAsiento || t.asiento?.numero || t.asientoNumero || t.asiento || t.numero || null,
+                  numero:
+                    t.numeroAsiento ||
+                    t.codigoAsiento ||
+                    (t.asiento && (t.asiento.numero || t.asiento.numeroAsiento)) ||
+                    t.asiento ||
+                    null,
                   tipoEntrada: t.tipoEntrada || t.tipo || t.tipoEntradaId || null,
+                  precio: t.precio || t.precioCompra || t.price || 0,
+                  codigoAsiento: t.codigoAsiento || null,
                 }));
+
+                const eventoId = primera.eventoId || primera.evento?.idEvento || primera.eventoId;
 
                 return {
                   numeroCompra: key,
                   reservaId: key,
                   evento: {
-                    nombre: evento.nombre || evento.titulo || primera.eventName || primera.eventoNombre || "-",
-                    fechaHora: evento.fechaHora || primera.fechaEvento || primera.eventDate || null,
-                    local: evento.local || primera.local || primera.venue || "-",
-                    banner: evento.banner || primera.banner || null,
+                    // Priorizar campos que vienen en TicketResponse
+                    nombreEvento:
+                      primera.nombreEvento ||
+                      (primera.evento && (primera.evento.nombre || primera.evento.titulo)) ||
+                      (eventDetailsMap[eventoId] && (eventDetailsMap[eventoId].nombreEvento || eventDetailsMap[eventoId].nombreEvento)) ||
+                      primera.eventName ||
+                      "-",
+                    // Fecha: priorizar la fecha de emisión del ticket (fechaEmision), luego fecha del evento
+                    fechaHora:
+                      primera.fecha ||
+                      (primera.evento && (primera.evento.fecha || primera.evento.fechaEvento)) ||
+                      primera.fechaEvento ||
+                      primera.eventDate ||
+                      (eventDetailsMap[eventoId] && (eventDetailsMap[eventoId].fecha && eventDetailsMap[eventoId].horaInicio ? `${eventDetailsMap[eventoId].fecha}T${eventDetailsMap[eventoId].horaInicio}` : null)) ||
+                      null,
+                    // Local / dirección: usar nombreZona si no hay venue
+                    // Local: priorizar nombre de zona del ticket (nombreZona), luego establecimiento
+                    local:
+                      primera.local ||
+                      (primera.evento && (primera.evento.local || primera.evento.venue)) ||
+                      primera.local ||
+                      (eventDetailsMap[eventoId] && eventDetailsMap[eventoId].establecimiento && eventDetailsMap[eventoId].establecimiento.nombreEstablecimiento) ||
+                      "-",
+                    banner:
+                      (primera.evento && primera.evento.banner) ||
+                      primera.banner ||
+                      bannersMap[eventoId] ||
+                      null,
                   },
                   montoTotal,
                   asientos,
+                  // Mapear campos de compra / ticket al objeto compra para DetalleEntrada
+                  fechaCompra: primera.fechaEmision || primera.fechaCompra || null,
+                  metodoPago: primera.tipo || primera.tipoPago || primera.metodoPago || null,
+                  nombreComprador: primera.nombreCliente || primera.nombreComprador || null,
+                  // guarantee fields expected by DetalleEntrada: email, telefono
+                  email:
+                    primera.email || primera.emailComprador || user?.correo || user?.email || null,
+                  telefono:
+                    primera.telefono || primera.telefonoComprador || user?.telefono || null,
                 };
               });
 
@@ -186,7 +285,7 @@ export const MisEntradas = () => {
                           <div className="md:w-40 h-40 overflow-hidden">
                             <img
                               src={compra.evento.banner}
-                              alt={compra.evento.nombre}
+                              alt={compra.evento.nombreEvento || compra.evento.nombre || "Evento"}
                               className="w-full h-full object-cover"
                             />
                           </div>
@@ -197,7 +296,7 @@ export const MisEntradas = () => {
                           <div>
                             <div className="mb-3">
                               <h3 className="text-lg font-bold mb-1">
-                                {compra.evento.nombre}
+                                {compra.evento.nombreEvento}
                               </h3>
                               <p className="text-sm text-subtle">
                                 Compra #{compra.numeroCompra}
@@ -259,15 +358,6 @@ export const MisEntradas = () => {
                             <Eye className="h-4 w-4" />
                             <span className="hidden md:inline">Ver</span>
                           </Button>
-
-                          <Button
-                            onClick={() => handleDescargarEntrada(compra.numeroCompra)}
-                            variant="outline"
-                            className="gap-2 flex-1"
-                          >
-                            <Download className="h-4 w-4" />
-                            <span className="hidden md:inline">Descargar</span>
-                          </Button>
                         </div>
                       </div>
 
@@ -276,14 +366,22 @@ export const MisEntradas = () => {
                         <div className="border-t border-zinc-800 px-6 py-3 bg-zinc-800/30">
                           <p className="text-xs text-subtle mb-2">Asientos</p>
                           <div className="flex flex-wrap gap-2">
-                            {compra.asientos.map((asiento, idx) => (
-                              <span
-                                key={idx}
-                                className="inline-block px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-medium border border-primary/30"
-                              >
-                                {asiento.numero || asiento}
-                              </span>
-                            ))}
+                            {compra.asientos.map((asiento, idx) => {
+                              const display =
+                                typeof asiento === "string"
+                                  ? asiento
+                                  : asiento && typeof asiento === "object"
+                                  ? asiento.numero || asiento.numeroAsiento || asiento.tipoEntrada || JSON.stringify(asiento)
+                                  : String(asiento);
+                              return (
+                                <span
+                                  key={idx}
+                                  className="inline-block px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-medium border border-primary/30"
+                                >
+                                  {display}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
