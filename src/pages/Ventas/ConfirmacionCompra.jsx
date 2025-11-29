@@ -41,8 +41,12 @@ export const ConfirmacionCompra = () => {
   };
 
   const handleDescargarTicket = () => {
-    // esto descargaría un PDF con el ticket si se añadiera la funcionalidad
-    console.log("Descargar ticket de:", compra?.numeroCompra);
+    // Abrir diálogo de impresión para descargar/guardar la confirmación
+    try {
+      window.print();
+    } catch (e) {
+      console.error("No se pudo abrir la impresión:", e);
+    }
   };
 
   if (!compra) {
