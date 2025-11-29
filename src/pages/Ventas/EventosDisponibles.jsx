@@ -221,7 +221,8 @@ export const EventosDisponibles = () => {
             {filteredEventos.map((evento) => (
               <div
                 key={evento.idEvento}
-                className="group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50 transition-all hover:border-zinc-700 hover:shadow-lg hover:shadow-primary/10"
+                onClick={() => navigate(`/eventos/detalle/${evento.idEvento}`)}
+                className="group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50 transition-all hover:border-zinc-700 hover:shadow-lg hover:shadow-primary/10 cursor-pointer"
               >
                 {/* Imagen del evento */}
                 {evento.banner && (
@@ -276,7 +277,10 @@ export const EventosDisponibles = () => {
 
                   {/* Botón de compra */}
                   <Button
-                    onClick={() => handleComprarEntradas(evento)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleComprarEntradas(evento);
+                    }}
                     className="w-full mt-4"
                   >
                     Comprar Entradas

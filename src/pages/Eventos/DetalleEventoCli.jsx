@@ -5,15 +5,23 @@ import { obtenerPrecioMinimoEvento } from "../../components/Evento/precioUtils";
 import { obtenerEstablecimiento } from "../../api/establecimientoService";
 import { listarPromocionesActivasPorEvento } from "../../api/promocionService";
 import Button from "../../components/ui/Button";
+import { useCartStore } from "../../store/useCartStore";
 
 export const DetalleEventoCli = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const setEventInfo = useCartStore((state) => state.setEventInfo);
+  
   const [evento, setEvento] = useState(null);
   const [bannerUrl, setBannerUrl] = useState(null);
   const [promociones, setPromociones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const handleComprar = () => {
+    setEventInfo(evento);
+    navigate(`/comprar-entradas/${evento.idEvento}`);
+  };
 
   useEffect(() => {
     const fetchDetalles = async () => {
@@ -142,7 +150,7 @@ export const DetalleEventoCli = () => {
                   <span className="block text-sm text-zinc-400">Precio desde</span>
                   <span className="text-2xl font-bold text-primary">S/. {evento.price}</span>
                 </div>
-                <Button>Comprar Entradas</Button>
+                <Button onClick={handleComprar}>Comprar Entradas</Button>
               </div>
             </div>
 

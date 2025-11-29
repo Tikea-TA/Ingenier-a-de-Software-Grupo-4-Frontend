@@ -96,7 +96,7 @@ export const descargarDocumento = async (idEstablecimiento, nombreArchivo) => {
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Doc_${nombreArchivo}.pdf`); // Nombre sugerido
+    link.setAttribute('download', `Doc_${nombreArchivo}.zip`); // Nombre sugerido
     document.body.appendChild(link);
     link.click();
     link.remove();
