@@ -12,7 +12,7 @@ export const LoginLabel = ({
   const [show, setShow] = useState(false);
   return type === "password" ? (
     <label className="text-sm">
-      <span className="mb-2 block text-text">Contraseña</span>
+      <span className="mb-2 block text-text">{label}</span>
       <div className="relative">
         <input
           type={show ? "text" : "password"}

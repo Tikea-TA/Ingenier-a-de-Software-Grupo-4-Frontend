@@ -11,7 +11,6 @@ export const registrarCliente = async (formData) => {
     telefono: formData.phonenumber,
     dni: formData.dni,
     direccion: formData.address,
-    nombreUser: formData.username,
     puntosPromociones: 0,
     tipoCliente: "REGISTRADO",
   };
@@ -21,13 +20,8 @@ export const registrarCliente = async (formData) => {
 };
 
 // Login cliente
-export const loginCliente = async ({ email, password }) => {
-  const payload = {
-    correo: email,
-    password,
-  };
-
-  const { data } = await api.post("/clientes/login", payload);
+export const loginCliente = async (credentials) => {
+  const { data } = await api.post("/clientes/login", credentials);
   return data;
 };
 
@@ -35,7 +29,7 @@ export const loginCliente = async ({ email, password }) => {
 export const actualizarCliente = async (id, formData) => {
   const payload = {
     correo: formData.email,
-    nombreUser: formData.username || formData.email,
+    nombreUsuario: formData.username,
     telefono: formData.phonenumber,
     direccion: formData.address,
     tipoCliente: formData.tipoCliente || "REGISTRADO",

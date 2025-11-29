@@ -16,6 +16,8 @@ import TheaterZoneMap from "../../components/TheaterZoneMap";
 import SeatMapEditor from "../../components/SeatMapEditor";
 import Button from "../../components/ui/Button";
 import { registrarEstablecimiento } from "../../api/registrarEstablecimiento";
+import { crearZona } from "../../api/zonaService";
+import { registrarAsiento } from "../../api/asientoService";
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -41,6 +43,66 @@ const mapTipoEspacioToBackend = (value) => {
       return null;
   }
 };
+
+/** Convierte código de asiento tipo "A1" / "AA23" a coordenadas 0-based { fila, columna } */
+function seatCodeToCoord(code) {
+  if (typeof code !== "string") return null;
+  const match = code.trim().match(/^([A-Za-z]+)(\d+)$/);
+  if (!match) return null;
+  const letters = match[1].toUpperCase();
+  const numStr = match[2];
+
+  let n = 0;
+  for (let i = 0; i < letters.length; i++) {
+    const ch = letters.charCodeAt(i);
+    if (ch < 65 || ch > 90) return null;
+    n = n * 26 + (ch - 64); // A=1 ... Z=26
+  }
+  const fila = n - 1;
+  const columna = parseInt(numStr, 10) - 1;
+  if (Number.isNaN(fila) || Number.isNaN(columna) || fila < 0 || columna < 0) {
+    return null;
+  }
+  return { fila, columna };
+}
+
+/** Normaliza el array de asientos bloqueados a [{fila, columna}] */
+function normalizeBlockedSeats(blocked) {
+  if (!Array.isArray(blocked)) return [];
+  const out = [];
+  for (const b of blocked) {
+    if (typeof b === "string") {
+      const coord = seatCodeToCoord(b);
+      if (coord) out.push(coord);
+    } else if (Array.isArray(b) && b.length === 2) {
+      const [fila, columna] = b;
+      if (typeof fila === "number" && typeof columna === "number") {
+        out.push({ fila, columna });
+      }
+    } else if (b && typeof b === "object") {
+      if (typeof b.fila === "number" && typeof b.columna === "number") {
+        out.push({ fila: b.fila, columna: b.columna });
+      } else if (typeof b.row === "number" && typeof b.col === "number") {
+        out.push({ fila: b.row, columna: b.col });
+      }
+    }
+  }
+  return out;
+}
+
+/** Convierte un id técnico de zona en un nombre de zona legible */
+function prettifyZoneId(id) {
+  if (!id) return "";
+  if (id === "oriente") return "ORIENTE";
+  if (id === "occidente") return "OCCIDENTE";
+  if (id === "norte") return "TRIBUNA NORTE";
+  if (id === "escenario") return "ESCENARIO";
+  if (id.startsWith("zona_")) {
+    const rest = id.slice("zona_".length).toUpperCase();
+    return `ZONA ${rest}`;
+  }
+  return String(id).toUpperCase();
+}
 
 export const RegistrarLocal = () => {
   const navigate = useNavigate();
@@ -131,9 +193,81 @@ export const RegistrarLocal = () => {
     }
 
     const tipoLocal = mapTipoEspacioToBackend(tipoEspacio);
+    const idGestor = 1; // Gestor de eventos
 
-    const idGestor = 18; // Gestor de eventos
+    // ===== Construir TRAMA de configuración de zonas & asientos =====
+    let configuracionLocal = null;
 
+    if (tipoEspacio === "estadio") {
+      const zonas = {};
+      Object.entries(zonesState || {}).forEach(([zoneId, estado]) => {
+        if (zoneId === "escenario") return;
+        const tieneDistribucion = !!zoneSeatDist[zoneId];
+        const seatMap = seatMapsByZone[zoneId];
+        zonas[zoneId] = {
+          idZona: zoneId,
+          nombreZona: prettifyZoneId(zoneId),
+          estado, // "available" | "selected" | "blocked"
+          habilitada: estado !== "blocked",
+          tieneDistribucionAsientos: tieneDistribucion,
+          mapaAsientos:
+            tieneDistribucion && seatMap
+              ? {
+                  filas: seatMap.rows,
+                  columnas: seatMap.cols,
+                  asientosBloqueados: normalizeBlockedSeats(seatMap.blocked),
+                }
+              : null,
+        };
+      });
+      configuracionLocal = {
+        tipoEspacio: "ESTADIO",
+        zonas,
+      };
+    } else if (tipoEspacio === "teatro") {
+      const zonas = {};
+      Object.entries(theaterZonesState || {}).forEach(([zoneId, estado]) => {
+        if (zoneId === "escenario") return;
+        const tieneDistribucion = !!theaterZoneSeatDist[zoneId];
+        const seatMap = theaterSeatMapsByZone[zoneId];
+        zonas[zoneId] = {
+          idZona: zoneId,
+          nombreZona: prettifyZoneId(zoneId),
+          estado,
+          habilitada: estado !== "blocked",
+          tieneDistribucionAsientos: tieneDistribucion,
+          mapaAsientos:
+            tieneDistribucion && seatMap
+              ? {
+                  filas: seatMap.rows,
+                  columnas: seatMap.cols,
+                  asientosBloqueados: normalizeBlockedSeats(seatMap.blocked),
+                }
+              : null,
+        };
+      });
+      configuracionLocal = {
+        tipoEspacio: "TEATRO",
+        zonas,
+      };
+    } else if (tipoEspacio === "auditorio") {
+      configuracionLocal = {
+        tipoEspacio: "AUDITORIO",
+        tieneDistribucionAsientos: escenarioHasSeatDist,
+        mapaAsientos: escenarioHasSeatDist
+          ? {
+              filas: escenarioSeatMap.rows,
+              columnas: escenarioSeatMap.cols,
+              asientosBloqueados: normalizeBlockedSeats(
+                escenarioSeatMap.blocked
+              ),
+            }
+          : null,
+      };
+    }
+
+    // Payload inicial SIN configuracionLocal (o ignorada por backend si se enviara)
+    // El usuario pidió usar los servicios de zona y asiento explícitamente.
     const payload = {
       idGestor,
       nombreEstablecimiento: data.nombre.trim(),
@@ -142,18 +276,107 @@ export const RegistrarLocal = () => {
       capacidadMaxima: Number(data.capacidad),
       estado: ESTADO_INICIAL_LOCAL,
       documentacionAdjunta: documentoBase64,
+      // configuracionLocal, // NO enviamos esto para crearlo manualmente
     };
 
     try {
       setIsSubmitting(true);
-      console.log("Payload establecimiento:", payload);
-      await registrarEstablecimiento(payload);
+      console.log("Registrando establecimiento...", payload);
+      const respEstablecimiento = await registrarEstablecimiento(payload);
+      const idEstablecimiento = respEstablecimiento.idEstablecimiento; 
+
+      if (!idEstablecimiento) {
+        throw new Error("El backend no devolvió el ID del establecimiento creado.");
+      }
+
+      console.log("Establecimiento creado con ID:", idEstablecimiento);
+
+      // ===== CREACIÓN MANUAL DE ZONAS Y ASIENTOS =====
+      
+      // Helper para nombre de fila (A, B, ... AA, AB)
+      const getRowName = (index) => {
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        if (index < 26) return letters[index];
+        return letters[Math.floor(index / 26) - 1] + letters[index % 26];
+      };
+
+      // Array de zonas a procesar
+      let zonasAProcesar = [];
+
+      if (tipoEspacio === "auditorio") {
+        // Auditorio se trata como una única zona "GENERAL"
+        zonasAProcesar.push({
+          nombreZona: "GENERAL",
+          capacidad: Number(data.capacidad), // Capacidad total
+          tieneDistribucionAsientos: configuracionLocal.tieneDistribucionAsientos,
+          mapaAsientos: configuracionLocal.mapaAsientos
+        });
+      } else {
+        // Estadio o Teatro
+        Object.values(configuracionLocal.zonas).forEach(z => {
+          if (z.habilitada) {
+            zonasAProcesar.push({
+              nombreZona: z.nombreZona,
+              capacidad: 100, // TODO: La UI no pide capacidad por zona, asumimos un default o repartimos?
+              tieneDistribucionAsientos: z.tieneDistribucionAsientos,
+              mapaAsientos: z.mapaAsientos
+            });
+          }
+        });
+      }
+
+      // Procesar cada zona secuencialmente
+      for (const zonaInfo of zonasAProcesar) {
+        console.log(`Creando zona: ${zonaInfo.nombreZona}`);
+        
+        const zonaPayload = {
+          idEstablecimiento,
+          nombreZona: zonaInfo.nombreZona,
+          capacidad: zonaInfo.capacidad // Backend debe manejar esto
+        };
+
+        const respZona = await crearZona(zonaPayload);
+        const idZona = respZona.idZona;
+
+        if (zonaInfo.tieneDistribucionAsientos && zonaInfo.mapaAsientos && idZona) {
+          const { filas, columnas, asientosBloqueados } = zonaInfo.mapaAsientos;
+          
+          // Crear asientos
+          // Esto puede ser lento si son muchos, pero es lo solicitado.
+          // Optimizacion: Promise.all por filas
+          const blockedSet = new Set(asientosBloqueados.map(b => `${b.fila},${b.columna}`));
+
+          const promesasAsientos = [];
+          for (let r = 0; r < filas; r++) {
+            for (let c = 0; c < columnas; c++) {
+              if (!blockedSet.has(`${r},${c}`)) {
+                const nombreAsiento = `${getRowName(r)}${c + 1}`;
+                const asientoPayload = {
+                  idZona,
+                  nombreAsiento,
+                  fila: r,
+                  columna: c,
+                  estado: "DISPONIBLE" // Enum backend: DISPONIBLE
+                };
+                promesasAsientos.push(registrarAsiento(asientoPayload));
+              }
+            }
+          }
+          
+          // Ejecutar en paralelo (cuidado con rate limits)
+          if (promesasAsientos.length > 0) {
+             console.log(`Creando ${promesasAsientos.length} asientos para zona ${zonaInfo.nombreZona}...`);
+             await Promise.all(promesasAsientos);
+          }
+        }
+      }
+
       setSuccessOpen(true);
     } catch (err) {
-      console.error("Error al registrar establecimiento:", err);
+      console.error("Error al registrar establecimiento o sus detalles:", err);
       const msg =
         err?.response?.data?.message ||
-        "No se pudo registrar el local. Intenta nuevamente.";
+        "No se pudo registrar el local o sus zonas. Intenta nuevamente.";
       setApiError(msg);
     } finally {
       setIsSubmitting(false);
@@ -239,7 +462,9 @@ export const RegistrarLocal = () => {
       const en = arg1,
         map = arg2;
       setTheaterEnabledIds((prev) => (arrayEqual(prev, en) ? prev : en));
-      setTheaterZonesState((prev) => (shallowEqualObj(prev, map) ? prev : map));
+      setTheaterZonesState((prev) =>
+        shallowEqualObj(prev, map) ? prev : map
+      );
       setSelectedTheaterZoneId((prev) => prev);
       return;
     }
@@ -356,7 +581,9 @@ export const RegistrarLocal = () => {
                       Ingesa la dirección del local.
                     </Text>
                     {errors.direccion && (
-                      <p className="text-sm text-red-400">{errors.direccion}</p>
+                      <p className="text-sm text-red-400">
+                        {errors.direccion}
+                      </p>
                     )}
                   </div>
 
@@ -439,7 +666,9 @@ export const RegistrarLocal = () => {
                       de seguridad.
                     </Text>
                     {errors.capacidad && (
-                      <p className="text-sm text-red-400">{errors.capacidad}</p>
+                      <p className="text-sm text-red-400">
+                        {errors.capacidad}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -466,10 +695,10 @@ export const RegistrarLocal = () => {
 
                     {selectedZoneId && (
                       <div className="space-y-3 rounded-lg border p-3 bg-zinc-900/30">
-                        <div className="text-sm font-mediumtext-zinc-200">
+                        <div className="text-sm font-medium text-zinc-200">
                           Zona seleccionada:{" "}
                           <span className="font-semibold">
-                            {selectedZoneId}
+                            {prettifyZoneId(selectedZoneId)}
                           </span>
                         </div>
 
@@ -555,7 +784,7 @@ export const RegistrarLocal = () => {
                         <div className="text-sm font-medium text-zinc-200">
                           Zona seleccionada:{" "}
                           <span className="font-semibold">
-                            {selectedTheaterZoneId}
+                            {prettifyZoneId(selectedTheaterZoneId)}
                           </span>
                         </div>
 

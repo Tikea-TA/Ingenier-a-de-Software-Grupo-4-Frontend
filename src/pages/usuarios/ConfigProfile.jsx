@@ -26,7 +26,7 @@ export const ConfigProfile = () => {
     if (user) {
       setFormData((prev) => ({
         ...prev,
-        username: user.nombreUser || user.correo || "",
+        username: user.nombreUsuario || user.correo || "",
         phonenumber: user.telefono || "",
         email: user.correo || "",
         address: user.direccion || "",
@@ -137,7 +137,7 @@ export const ConfigProfile = () => {
                       name="readonlyName"
                       label="Nombres"
                       value={user?.nombre || ""}
-                      onChange={() => {}}
+                      onChange={() => { }}
                       // evitamos edición hasta que el DTO lo soporte
                       required={false}
                     />
@@ -146,7 +146,7 @@ export const ConfigProfile = () => {
                       name="readonlyLastname"
                       label="Apellidos"
                       value={user?.apellidos || ""}
-                      onChange={() => {}}
+                      onChange={() => { }}
                       required={false}
                     />
                   </div>

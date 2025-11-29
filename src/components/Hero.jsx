@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import Button from "./ui/Button";
 
 export default function Hero() {
@@ -6,11 +7,14 @@ export default function Hero() {
       <h1 className="text-4xl md:text-5xl font-extrabold text-zinc-100 tracking-tight">
         Tu Próximo Evento Inolvidable te Espera
       </h1>
-      <p className="mt-3 text-zinc-400 max-w-2xl mx-auto">
-        Descubre conciertos, deportes, teatro y más. Compra tus entradas de forma fácil y segura.
+      <p className="mt-3 text-subtle max-w-2xl mx-auto">
+        Descubre conciertos, deportes, teatro y más. Compra tus entradas de
+        forma fácil y segura.
       </p>
       <div className="mt-6">
-        <Button>Explorar eventos</Button>
+        <Link to="/eventos">
+          <Button>Explorar eventos</Button>
+        </Link>
       </div>
     </section>
   );
